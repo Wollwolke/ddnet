@@ -615,7 +615,7 @@ void CMenus::RenderSettingsTee(CUIRect MainView)
 			if(g_Config.m_Debug)
 			{
 				ColorRGBA BloodColor = *UseCustomColor ? color_cast<ColorRGBA>(ColorHSLA(*ColorBody)) : s->m_BloodColor;
-				Graphics()->TextureSet(-1);
+				Graphics()->TextureClear();
 				Graphics()->QuadsBegin();
 				Graphics()->SetColor(BloodColor.r, BloodColor.g, BloodColor.b, 1.0f);
 				IGraphics::CQuadItem QuadItem(Item.m_Rect.x, Item.m_Rect.y, 12.0f, 12.0f);
@@ -695,7 +695,7 @@ static CKeyInfo gs_aKeys[] =
 	{ "Pistol", "+weapon2", 0, 0 },
 	{ "Shotgun", "+weapon3", 0, 0 },
 	{ "Grenade", "+weapon4", 0, 0 },
-	{ "Rifle", "+weapon5", 0, 0 },
+	{ "Laser", "+weapon5", 0, 0 },
 	{ "Next weapon", "+nextweapon", 0, 0 },
 	{ "Prev. weapon", "+prevweapon", 0, 0 },
 
@@ -723,7 +723,7 @@ static CKeyInfo gs_aKeys[] =
 
 /*	This is for scripts/update_localization.py to work, don't remove!
 	Localize("Move left");Localize("Move right");Localize("Jump");Localize("Fire");Localize("Hook");Localize("Hammer");
-	Localize("Pistol");Localize("Shotgun");Localize("Grenade");Localize("Rifle");Localize("Next weapon");Localize("Prev. weapon");
+	Localize("Pistol");Localize("Shotgun");Localize("Grenade");Localize("Laser");Localize("Next weapon");Localize("Prev. weapon");
 	Localize("Vote yes");Localize("Vote no");Localize("Chat");Localize("Team chat");Localize("Show chat");Localize("Emoticon");
 	Localize("Spectator mode");Localize("Spectate next");Localize("Spectate previous");Localize("Console");Localize("Remote console");Localize("Screenshot");Localize("Scoreboard");Localize("Respawn");
 */
@@ -1906,7 +1906,7 @@ void CMenus::RenderSettingsHUD(CUIRect MainView)
 		vec2 Out, Border;
 
 		Graphics()->BlendNormal();
-		Graphics()->TextureSet(-1);
+		Graphics()->TextureClear();
 		Graphics()->QuadsBegin();
 
 		// do outline
@@ -1958,7 +1958,7 @@ void CMenus::RenderSettingsHUD(CUIRect MainView)
 		Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
 		Graphics()->QuadsBegin();
 
-		RenderTools()->SelectSprite(SPRITE_WEAPON_RIFLE_BODY);
+		RenderTools()->SelectSprite(SPRITE_WEAPON_LASER_BODY);
 		RenderTools()->DrawSprite(Weapon.x, Weapon.y + Weapon.h / 2.0f, 60.0f);
 
 		Graphics()->QuadsEnd();
