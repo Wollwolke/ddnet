@@ -2420,6 +2420,38 @@ void str_sanitize_filename(char *str_in)
 	}
 }
 
+/* removes leading and trailing spaces and limits the use of multiple spaces */
+void str_clean_whitespaces(char *str_in)
+{
+	char *read = str_in;
+	char *write = str_in;
+
+	/* skip initial whitespace */
+	while(*read == ' ')
+		read++;
+
+	/* end of read string is detected in the loop */
+	while(1)
+	{
+		/* skip whitespace */
+		int found_whitespace = 0;
+		for(; *read == ' '; read++)
+			found_whitespace = 1;
+		/* if not at the end of the string, put a found whitespace here */
+		if(*read)
+		{
+			if(found_whitespace)
+				*write++ = ' ';
+			*write++ = *read++;
+		}
+		else
+		{
+			*write = 0;
+			break;
+		}
+	}
+}
+
 char *str_skip_to_whitespace(char *str)
 {
 	while(*str && (*str != ' ' && *str != '\t' && *str != '\n'))
@@ -2427,7 +2459,21 @@ char *str_skip_to_whitespace(char *str)
 	return str;
 }
 
+const char *str_skip_to_whitespace_const(const char *str)
+{
+	while(*str && (*str != ' ' && *str != '\t' && *str != '\n'))
+		str++;
+	return str;
+}
+
 char *str_skip_whitespaces(char *str)
+{
+	while(*str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r'))
+		str++;
+	return str;
+}
+
+const char *str_skip_whitespaces_const(const char *str)
 {
 	while(*str && (*str == ' ' || *str == '\t' || *str == '\n' || *str == '\r'))
 		str++;

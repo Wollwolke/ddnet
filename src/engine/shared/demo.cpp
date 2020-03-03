@@ -8,6 +8,12 @@
 
 #include <engine/shared/config.h>
 
+#if defined(CONF_VIDEORECORDER)
+	#include <engine/shared/video.h>
+#endif
+
+#include <game/generated/protocol.h>
+
 #include "compression.h"
 #include "demo.h"
 #include "memheap.h"
@@ -404,6 +410,9 @@ CDemoPlayer::CDemoPlayer(class CSnapshotDelta *pSnapshotDelta)
 	m_pKeyFrames = 0;
 	m_SpeedIndex = 4;
 
+	m_TickTime = 0;
+	m_Time = 0;
+
 	m_pSnapshotDelta = pSnapshotDelta;
 	m_LastSnapshotDataSize = -1;
 }
@@ -556,6 +565,10 @@ void CDemoPlayer::DoTick()
 			// stop on error or eof
 			if(m_pConsole)
 				m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_player", "end of file");
+			#if defined(CONF_VIDEORECORDER)
+				if (IVideo::Current())
+					Stop();
+			#endif
 			if(m_Info.m_PreviousTick == -1)
 			{
 				if(m_pConsole)
@@ -664,6 +677,10 @@ void CDemoPlayer::DoTick()
 void CDemoPlayer::Pause()
 {
 	m_Info.m_Info.m_Paused = 1;
+#if defined(CONF_VIDEORECORDER)
+	if(IVideo::Current() && g_Config.m_ClVideoPauseWithDemo)
+		IVideo::Current()->pause();
+#endif
 }
 
 void CDemoPlayer::Unpause()
@@ -674,6 +691,10 @@ void CDemoPlayer::Unpause()
 		m_Info.start_time = time_get();*/
 		m_Info.m_Info.m_Paused = 0;
 	}
+#if defined(CONF_VIDEORECORDER)
+	if(IVideo::Current() && g_Config.m_ClVideoPauseWithDemo)
+		IVideo::Current()->pause();
+#endif
 }
 
 int CDemoPlayer::Load(class IStorage *pStorage, class IConsole *pConsole, const char *pFilename, int StorageType)
@@ -852,6 +873,34 @@ int CDemoPlayer::NextFrame()
 	return IsPlaying();
 }
 
+int64 CDemoPlayer::time()
+{
+#if defined(CONF_VIDEORECORDER)
+	static bool s_Recording = false;
+	if (IVideo::Current())
+	{
+		if (!s_Recording)
+		{
+			s_Recording = true;
+			m_Info.m_LastUpdate = IVideo::time();
+		}
+		return IVideo::time();
+	}
+	else
+	{
+		int64 Now = time_get();
+		if (s_Recording)
+		{
+			s_Recording = false;
+			m_Info.m_LastUpdate = Now;
+		}
+		return Now;
+	}
+#else
+	return time_get();
+#endif
+}
+
 int CDemoPlayer::Play()
 {
 	// fill in previous and next tick
@@ -862,7 +911,7 @@ int CDemoPlayer::Play()
 	/*m_Info.start_tick = m_Info.previous_tick;
 	m_Info.start_time = time_get();*/
 	m_Info.m_CurrentTime = m_Info.m_PreviousTick*time_freq()/SERVER_TICK_SPEED;
-	m_Info.m_LastUpdate = time_get();
+	m_Info.m_LastUpdate = time();
 	return 0;
 }
 
@@ -926,7 +975,7 @@ void CDemoPlayer::SetSpeedIndex(int Offset)
 
 int CDemoPlayer::Update(bool RealTime)
 {
-	int64 Now = time_get();
+	int64 Now = time();
 	int64 Deltatime = Now-m_Info.m_LastUpdate;
 	m_Info.m_LastUpdate = Now;
 
@@ -976,6 +1025,8 @@ int CDemoPlayer::Update(bool RealTime)
 				m_pConsole->Print(IConsole::OUTPUT_LEVEL_ADDINFO, "demo_player", aBuf);
 			}
 		}
+
+		m_Time += m_TickTime;
 	}
 
 	return 0;
@@ -983,6 +1034,11 @@ int CDemoPlayer::Update(bool RealTime)
 
 int CDemoPlayer::Stop()
 {
+#if defined(CONF_VIDEORECORDER)
+		if (IVideo::Current())
+			IVideo::Current()->stop();
+#endif
+
 	if(!m_File)
 		return -1;
 
