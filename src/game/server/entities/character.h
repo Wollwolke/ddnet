@@ -3,6 +3,7 @@
 #ifndef GAME_SERVER_ENTITIES_CHARACTER_H
 #define GAME_SERVER_ENTITIES_CHARACTER_H
 
+#include <engine/antibot.h>
 #include <game/server/entity.h>
 #include <game/generated/server_data.h>
 #include <game/generated/protocol.h>
@@ -111,6 +112,9 @@ private:
 
 	} m_aWeapons[NUM_WEAPONS];
 
+	struct WeaponStat m_aPrevSaveWeapons[NUM_WEAPONS];
+	int m_PrevSaveActiveWeapon;
+
 	int m_LastWeapon;
 	int m_QueuedWeapon;
 
@@ -173,7 +177,7 @@ private:
 	void HandleBroadcast();
 	void HandleTuneLayer();
 	void SendZoneMsgs();
-	CAntibot *Antibot();
+	IAntibot *Antibot();
 
 	bool m_SetSavePos;
 	vec2 m_PrevSavePos;

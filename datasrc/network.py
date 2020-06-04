@@ -17,7 +17,7 @@ GameInfoFlags = [
 	"BUG_DDRACE_INPUT", "BUG_FNG_LASER_RANGE", "BUG_VANILLA_BOUNCE",
 	"PREDICT_FNG", "PREDICT_DDRACE", "PREDICT_DDRACE_TILES", "PREDICT_VANILLA",
 	"ENTITIES_DDNET", "ENTITIES_DDRACE", "ENTITIES_RACE", "ENTITIES_FNG",
-	"ENTITIES_VANILLA", "DONT_MASK_ENTITIES",
+	"ENTITIES_VANILLA", "DONT_MASK_ENTITIES", "ENTITIES_BW",
 ]
 ExPlayerFlags = ["AFK", "PAUSED", "SPEC"]
 
@@ -52,7 +52,7 @@ enum
 
 enum
 {
-	GAMEINFO_CURVERSION=3,
+	GAMEINFO_CURVERSION=4,
 };
 '''
 
@@ -408,10 +408,7 @@ Messages = [
 		NetIntAny("m_PlayerTimeBest"),
 	]),
 
-	NetMessage("Sv_PlayerTime", [
-		NetIntAny("m_Time"),
-		NetIntRange("m_ClientID", 0, 'MAX_CLIENTS-1'),
-	]),
+	NetMessage("Unused", []),
 
 	NetMessage("Sv_TeamsState", []),
 

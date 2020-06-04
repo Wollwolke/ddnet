@@ -3,6 +3,7 @@
 #ifndef GAME_SERVER_GAMECONTEXT_H
 #define GAME_SERVER_GAMECONTEXT_H
 
+#include <engine/antibot.h>
 #include <engine/server.h>
 #include <engine/console.h>
 #include <engine/shared/memheap.h>
@@ -11,7 +12,6 @@
 #include <game/mapbugs.h>
 #include <game/voting.h>
 
-#include "antibot.h"
 #include "eventhandler.h"
 #include "gamecontroller.h"
 #include "gameworld.h"
@@ -67,6 +67,7 @@ class CGameContext : public IGameServer
 	IConsole *m_pConsole;
 	IEngine *m_pEngine;
 	IStorage *m_pStorage;
+	IAntibot *m_pAntibot;
 	CLayers m_Layers;
 	CCollision m_Collision;
 	CNetObjHandler m_NetObjHandler;
@@ -78,7 +79,7 @@ class CGameContext : public IGameServer
 	ASYNCIO *m_pTeeHistorianFile;
 	CUuid m_GameUuid;
 	CMapBugs m_MapBugs;
-	CAntibot m_Antibot;
+	CPrng m_Prng;
 
 	std::shared_ptr<CRandomMapResult> m_pRandomMapResult;
 	std::shared_ptr<CMapVoteResult> m_pMapVoteResult;
@@ -101,8 +102,6 @@ class CGameContext : public IGameServer
 	static void ConChangeMap(IConsole::IResult *pResult, void *pUserData);
 	static void ConRandomMap(IConsole::IResult *pResult, void *pUserData);
 	static void ConRandomUnfinishedMap(IConsole::IResult *pResult, void *pUserData);
-	static void ConSaveTeam(IConsole::IResult *pResult, void *pUserData);
-	static void ConLoadTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConRestart(IConsole::IResult *pResult, void *pUserData);
 	static void ConBroadcast(IConsole::IResult *pResult, void *pUserData);
 	static void ConSay(IConsole::IResult *pResult, void *pUserData);
@@ -130,7 +129,7 @@ public:
 	CCollision *Collision() { return &m_Collision; }
 	CTuningParams *Tuning() { return &m_Tuning; }
 	CTuningParams *TuningList() { return &m_aTuningList[0]; }
-	CAntibot *Antibot() { return &m_Antibot; }
+	IAntibot *Antibot() { return m_pAntibot; }
 
 	CGameContext();
 	~CGameContext();
@@ -146,7 +145,6 @@ public:
 	// helper functions
 	class CCharacter *GetPlayerChar(int ClientID);
 	bool EmulateBug(int Bug);
-	void FillAntibot(CAntibotData *pData);
 
 	// voting
 	void StartVote(const char *pDesc, const char *pCommand, const char *pReason);
@@ -253,14 +251,14 @@ public:
 	virtual const char *NetVersion();
 
 	// DDRace
-
+	void OnClientDDNetVersionKnown(int ClientID);
+	virtual void FillAntibot(CAntibotRoundData *pData);
 	int ProcessSpamProtection(int ClientID);
 	int GetDDRaceTeam(int ClientID);
 	// Describes the time when the first player joined the server.
 	int64 m_NonEmptySince;
 	int64 m_LastMapVote;
 	int GetClientVersion(int ClientID);
-	void SetClientVersion(int ClientID, int Version);
 	bool PlayerExists(int ClientID) { return m_apPlayers[ClientID]; };
 	// Returns true if someone is actively moderating.
 	bool PlayerModerating();
@@ -329,6 +327,7 @@ private:
 	static void ConDND(IConsole::IResult *pResult, void *pUserData);
 	static void ConMapInfo(IConsole::IResult *pResult, void *pUserData);
 	static void ConTimeout(IConsole::IResult *pResult, void *pUserData);
+	static void ConPractice(IConsole::IResult *pResult, void *pUserData);
 	static void ConSave(IConsole::IResult *pResult, void *pUserData);
 	static void ConLoad(IConsole::IResult *pResult, void *pUserData);
 	static void ConMap(IConsole::IResult *pResult, void *pUserData);
@@ -337,6 +336,7 @@ private:
 	static void ConBroadTime(IConsole::IResult *pResult, void *pUserData);
 	static void ConJoinTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConLockTeam(IConsole::IResult *pResult, void *pUserData);
+	static void ConUnlockTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConInviteTeam(IConsole::IResult *pResult, void *pUserData);
 	static void ConMe(IConsole::IResult *pResult, void *pUserData);
 	static void ConWhisper(IConsole::IResult *pResult, void *pUserData);
@@ -396,6 +396,7 @@ private:
 	void WhisperID(int ClientID, int VictimID, char *pMessage);
 	void Converse(int ClientID, char *pStr);
 	bool IsVersionBanned(int Version);
+	void UnlockTeam(int ClientID, int Team);
 
 public:
 	CLayers *Layers() { return &m_Layers; }

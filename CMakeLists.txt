@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 
+set(CMAKE_OSX_DEPLOYMENT_TARGET 10.9 CACHE INTERNAL "")
+if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.9)
+  message(WARNING "Building for macOS <= 10.9 is not supported")
+endif()
+
 file(STRINGS src/game/version.h VERSION_LINE
   LIMIT_COUNT 1
   REGEX "^#define GAME_RELEASE_VERSION "
@@ -84,6 +89,7 @@ option(WEBSOCKETS "Enable websockets support" OFF)
 option(MYSQL "Enable mysql support" OFF)
 option(AUTOUPDATE "Enable the autoupdater" ${AUTOUPDATE_DEFAULT})
 option(VIDEORECORDER "Enable video recording support via FFmpeg" OFF)
+option(UPNP "Enable UPnP support" OFF)
 option(ANTIBOT "Enable support for a dynamic anticheat library" OFF)
 option(CLIENT "Compile client" ON)
 option(DOWNLOAD_GTEST "Download and compile GTest" ${AUTO_DEPENDENCIES_DEFAULT})
@@ -168,7 +174,6 @@ if(NOT MSVC)
 
   if(TARGET_OS STREQUAL "mac")
     add_c_compiler_flag_if_supported(OUR_FLAGS -stdlib=libc++)
-    add_c_compiler_flag_if_supported(OUR_FLAGS -mmacosx-version-min=10.7)
   endif()
 
   add_c_compiler_flag_if_supported(OUR_FLAGS_OWN -Wall)
@@ -326,6 +331,9 @@ endif()
 find_package(Ogg)
 find_package(Opus)
 find_package(Opusfile)
+if(UPNP)
+  find_package(Miniupnpc)
+endif()
 find_package(Pnglite)
 find_package(PythonInterp)
 find_package(SDL2)
@@ -343,6 +351,7 @@ endif()
 
 
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
+  find_program(CMAKE_OTOOL otool)
   find_program(DMG dmg)
   find_program(HFSPLUS hfsplus)
   find_program(NEWFS_HFS newfs_hfs)
@@ -361,7 +370,11 @@ if(TARGET_OS AND TARGET_OS STREQUAL "mac")
 endif()
 
 message(STATUS "******** DDNet ********")
-message(STATUS "Target OS: ${TARGET_OS} ${TARGET_BITS}bit")
+if(NOT TARGET_OS STREQUAL "mac")
+  message(STATUS "Target OS: ${TARGET_OS} ${TARGET_BITS}bit")
+else()
+  message(STATUS "Target OS: ${TARGET_OS} ${TARGET_BITS}bit (SDK: ${CMAKE_OSX_SYSROOT})")
+endif()
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
@@ -398,6 +411,9 @@ show_dependency_status("Ogg" OGG)
 show_dependency_status("OpenSSL Crypto" CRYPTO)
 show_dependency_status("Opus" OPUS)
 show_dependency_status("Opusfile" OPUSFILE)
+if(UPNP)
+  show_dependency_status("Miniupnpc" MINIUPNPC)
+endif()
 show_dependency_status("Pnglite" PNGLITE)
 show_dependency_status("PythonInterp" PYTHONINTERP)
 show_dependency_status("SDL2" SDL2)
@@ -423,6 +439,10 @@ endif()
 
 if(WEBSOCKETS AND NOT(WEBSOCKETS_FOUND))
   message(SEND_ERROR "You must install libwebsockets to compile the DDNet server with websocket support")
+endif()
+
+if(UPNP AND NOT(MINIUPNPC_FOUND))
+  message(SEND_ERROR "You must install miniupnpc to compile the DDNet server with UPnP support")
 endif()
 
 if(CLIENT AND NOT(FREETYPE_FOUND))
@@ -463,18 +483,18 @@ elseif(TARGET_OS STREQUAL "mac")
   find_library(OPENGL OpenGL)
   find_library(SECURITY Security)
   set(PLATFORM_CLIENT
-    src/osx/notification.h
-    src/osx/notification.mm
+    src/osx/notifications.mm
     src/osxlaunch/client.m
   )
   set(PLATFORM_CLIENT_LIBS ${COCOA} ${OPENGL})
   set(PLATFORM_LIBS ${CARBON} ${SECURITY})
 else()
-  set(PLATFORM_CLIENT)
+  find_package(Notify)
   find_package(OpenGL)
   find_package(X11)
-  set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY} ${X11_X11_LIB})
-  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR} ${X11_X11_INCLUDE_PATH})
+  set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY} ${X11_X11_LIB} ${NOTIFY_LIBRARIES})
+  set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR} ${X11_X11_INCLUDE_PATH} ${NOTIFY_INCLUDE_DIRS})
+  set(PLATFORM_CLIENT)
   if(TARGET_OS STREQUAL "linux")
     set(PLATFORM_LIBS rt) # clock_gettime for glibc < 2.17
   else()
@@ -644,6 +664,7 @@ set_src(BASE GLOB_RECURSE src/base
   vmath.h
 )
 set_src(ENGINE_INTERFACE GLOB src/engine
+  antibot.h
   client.h
   config.h
   console.h
@@ -754,6 +775,8 @@ set_src(GAME_SHARED GLOB src/game
   mapitems_ex.cpp
   mapitems_ex.h
   mapitems_ex_types.h
+  prng.cpp
+  prng.h
   teamscore.cpp
   teamscore.h
   tuning.h
@@ -822,6 +845,8 @@ if(CLIENT)
     input.cpp
     input.h
     keynames.h
+    notifications.cpp
+    notifications.h
     opengl_sl.cpp
     opengl_sl.h
     opengl_sl_program.cpp
@@ -1011,6 +1036,8 @@ if(CLIENT)
     ${SDL2_INCLUDE_DIRS}
     ${WAVPACK_INCLUDE_DIRS}
     ${FFMPEG_INCLUDE_DIRS}
+
+    ${PLATFORM_CLIENT_INCLUDE_DIRS}
   )
 
   set(PARAMS "${WAVPACK_INCLUDE_DIRS};${WAVPACK_INCLUDE_DIRS}")
@@ -1022,11 +1049,16 @@ if(CLIENT)
   set(CMAKE_REQUIRED_INCLUDES ${ORIGINAL_CMAKE_REQUIRED_INCLUDES} ${WAVPACK_INCLUDE_DIRS})
   set(CMAKE_REQUIRED_LIBRARIES ${ORIGINAL_CMAKE_REQUIRED_LIBRARIES} ${WAVPACK_LIBRARIES})
   check_symbol_exists(WavpackOpenFileInputEx wavpack.h WAVPACK_OPEN_FILE_INPUT_EX)
+  check_symbol_exists(WavpackCloseFile wavpack.h WAVPACK_CLOSE_FILE)
   set(CMAKE_REQUIRED_INCLUDES ${ORIGINAL_CMAKE_REQUIRED_INCLUDES})
   set(CMAKE_REQUIRED_LIBRARIES ${ORIGINAL_CMAKE_REQUIRED_LIBRARIES})
 
   if(WAVPACK_OPEN_FILE_INPUT_EX)
     target_compile_definitions(${TARGET_CLIENT} PRIVATE CONF_WAVPACK_OPEN_FILE_INPUT_EX)
+  endif()
+
+  if(WAVPACK_CLOSE_FILE)
+	  target_compile_definitions(${TARGET_CLIENT} PRIVATE CONF_WAVPACK_CLOSE_FILE)
   endif()
 
   list(APPEND TARGETS_OWN ${TARGET_CLIENT})
@@ -1046,6 +1078,8 @@ set_src(ANTIBOT_SRC GLOB src/antibot
 )
 
 set_src(ENGINE_SERVER GLOB src/engine/server
+  antibot.cpp
+  antibot.h
   authmanager.cpp
   authmanager.h
   name_ban.cpp
@@ -1060,10 +1094,10 @@ set_src(ENGINE_SERVER GLOB src/engine/server
   sql_server.h
   sql_string_helpers.cpp
   sql_string_helpers.h
+  upnp.cpp
+  upnp.h
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
-  antibot.cpp
-  antibot.h
   ddracechat.cpp
   ddracechat.h
   ddracecommands.cpp
@@ -1127,7 +1161,7 @@ endif()
 
 # Antibot
 if(ANTIBOT)
-  set(TARGET_ANTIBOT antibot)
+  set(TARGET_ANTIBOT ddnet-antibot)
   add_library(${TARGET_ANTIBOT} SHARED ${ANTIBOT_SRC})
   list(APPEND TARGETS_OWN ${TARGET_ANTIBOT})
 endif()
@@ -1137,6 +1171,7 @@ set(LIBS_SERVER
   ${LIBS}
   ${MYSQL_LIBRARIES}
   ${TARGET_ANTIBOT}
+  ${MINIUPNPC_LIBRARIES}
   # Add pthreads (on non-Windows) at the end, so that other libraries can depend
   # on it.
   ${CMAKE_THREAD_LIBS_INIT}
@@ -1267,6 +1302,7 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     json.cpp
     mapbugs.cpp
     name_ban.cpp
+    prng.cpp
     str.cpp
     strip_path_and_extension.cpp
     teehistorian.cpp
@@ -1476,6 +1512,9 @@ if(NOT DEV)
   install(DIRECTORY data DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/ddnet COMPONENT data)
   install(TARGETS ${TARGET_CLIENT} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT client)
   install(TARGETS ${TARGET_SERVER} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT server)
+  if(ANTIBOT)
+    install(TARGETS ${TARGET_ANTIBOT} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT server)
+  endif()
   install(TARGETS ${TARGETS_TOOLS} DESTINATION ${CMAKE_INSTALL_LIBDIR}/ddnet COMPONENT tools)
   install(FILES other/ddnet.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications COMPONENT client)
   install(FILES other/ddnet.appdata.xml DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo COMPONENT client)
@@ -1496,7 +1535,6 @@ else()
 endif()
 
 set(PACKAGE_TARGETS)
-
 if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
   file(MAKE_DIRECTORY bundle/client/)
   file(MAKE_DIRECTORY bundle/server/)
@@ -1537,8 +1575,8 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_CLIENT}> ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/ddnet-libs/sdl/mac/lib64/SDL2.framework ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/SDL2.framework
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/freetype/mac/lib64/libfreetype.6.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
-    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change @rpath/SDL2.framework/Versions/A/SDL2 @executable_path/../Frameworks/SDL2.framework/SDL2 ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
-    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change @rpath/hidapi.framework/Versions/A/hidapi @executable_path/../Frameworks/SDL2.framework/Versions/A/Frameworks/hidapi.framework/Versions/A/hidapi ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/SDL2.framework/SDL2
+    COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_strip_rpath.py ${CMAKE_OTOOL} ${CMAKE_INSTALL_NAME_TOOL} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
     COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libfreetype.6.dylib @executable_path/../Frameworks/libfreetype.6.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
 
     # SERVER
@@ -1675,11 +1713,6 @@ foreach(target ${TARGETS_LINK})
   endif()
   if(TARGET_OS STREQUAL "mac")
     target_link_libraries(${target} -stdlib=libc++)
-    target_link_libraries(${target} -mmacosx-version-min=10.7)
-    # Fixes: Undefined symbols for architecture x86_64:
-    #   "___isOSVersionAtLeast", referenced from:
-    #       _singleipconnect in libcurl.a(libcurl_la-connect.o)
-    target_link_libraries(${target} -Wl,-undefined -Wl,dynamic_lookup)
   endif()
   if((MINGW OR TARGET_OS STREQUAL "linux") AND PREFER_BUNDLED_LIBS)
     # Statically link the standard libraries with on MinGW/Linux so we don't
@@ -1718,6 +1751,10 @@ foreach(target ${TARGETS_OWN})
   if(WEBSOCKETS)
     target_compile_definitions(${target} PRIVATE CONF_WEBSOCKETS)
     target_include_directories(${target} PRIVATE ${WEBSOCKETS_INCLUDE_DIRS})
+  endif()
+  if(UPNP)
+    target_compile_definitions(${target} PRIVATE CONF_UPNP)
+    target_include_directories(${target} PRIVATE ${MINIUPNPC_INCLUDE_DIRS})
   endif()
   if(VIDEORECORDER)
     target_compile_definitions(${target} PRIVATE CONF_VIDEORECORDER)
