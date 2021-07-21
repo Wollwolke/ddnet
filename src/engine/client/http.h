@@ -1,9 +1,9 @@
 #ifndef ENGINE_CLIENT_HTTP_H
 #define ENGINE_CLIENT_HTTP_H
 
+#include <engine/kernel.h>
 #include <engine/shared/jobs.h>
 #include <engine/storage.h>
-#include <engine/kernel.h>
 
 typedef struct _json_value json_value;
 typedef void CURL;
@@ -17,6 +17,20 @@ enum
 	HTTP_ABORTED,
 };
 
+enum class HTTPLOG
+{
+	NONE,
+	FAILURE,
+	ALL,
+};
+
+struct CTimeout
+{
+	long ConnectTimeoutMs;
+	long LowSpeedLimit;
+	long LowSpeedTime;
+};
+
 class CRequest : public IJob
 {
 	// Abort the request with an error if `BeforeInit()` or `AfterInit()`
@@ -26,16 +40,16 @@ class CRequest : public IJob
 	virtual bool AfterInit(void *pCurl) { return true; }
 	virtual size_t OnData(char *pData, size_t DataSize) = 0;
 
-	virtual void OnProgress() { }
-	virtual bool BeforeCompletion() { return true; }
-	virtual void OnCompletion() { }
+	virtual void OnProgress() {}
 
 	char m_aUrl[256];
-	bool m_CanTimeout;
+
+	CTimeout m_Timeout;
 
 	double m_Size;
 	double m_Current;
 	int m_Progress;
+	HTTPLOG m_LogProgress;
 
 	std::atomic<int> m_State;
 	std::atomic<bool> m_Abort;
@@ -46,14 +60,27 @@ class CRequest : public IJob
 	void Run();
 	int RunImpl(CURL *pHandle);
 
+protected:
+	virtual int OnCompletion(int State) { return State; }
+
 public:
-	CRequest(const char *pUrl, bool CanTimeout);
+	CRequest(const char *pUrl, CTimeout Timeout, HTTPLOG LogProgress = HTTPLOG::ALL);
 
 	double Current() const { return m_Current; }
 	double Size() const { return m_Size; }
 	int Progress() const { return m_Progress; }
 	int State() const { return m_State; }
 	void Abort() { m_Abort = true; }
+};
+
+class CHead : public CRequest
+{
+	virtual size_t OnData(char *pData, size_t DataSize) { return DataSize; }
+	virtual bool AfterInit(void *pCurl);
+
+public:
+	CHead(const char *pUrl, CTimeout Timeout, HTTPLOG LogProgress = HTTPLOG::ALL);
+	~CHead();
 };
 
 class CGet : public CRequest
@@ -65,10 +92,20 @@ class CGet : public CRequest
 	unsigned char *m_pBuffer;
 
 public:
-	CGet(const char *pUrl, bool CanTimeout);
+	CGet(const char *pUrl, CTimeout Timeout, HTTPLOG LogProgress = HTTPLOG::ALL);
 	~CGet();
 
-	size_t ResultSize() const { if(!Result()) { return 0; } else { return m_BufferSize; } }
+	size_t ResultSize() const
+	{
+		if(!Result())
+		{
+			return 0;
+		}
+		else
+		{
+			return m_BufferSize;
+		}
+	}
 	unsigned char *Result() const;
 	unsigned char *TakeResult();
 	json_value *ResultJson() const;
@@ -78,20 +115,23 @@ class CGetFile : public CRequest
 {
 	virtual size_t OnData(char *pData, size_t DataSize);
 	virtual bool BeforeInit();
-	virtual bool BeforeCompletion();
 
 	IStorage *m_pStorage;
 
-	char m_aDest[256];
-	int m_StorageType;
+	char m_aDestFull[MAX_PATH_LENGTH];
 	IOHANDLE m_File;
 
+protected:
+	char m_aDest[MAX_PATH_LENGTH];
+	int m_StorageType;
+
+	virtual int OnCompletion(int State);
+
 public:
-	CGetFile(IStorage *pStorage, const char *pUrl, const char *pDest, int StorageType = -2, bool CanTimeout = true);
+	CGetFile(IStorage *pStorage, const char *pUrl, const char *pDest, int StorageType = -2, CTimeout Timeout = CTimeout{4000, 500, 5}, HTTPLOG LogProgress = HTTPLOG::ALL);
 
 	const char *Dest() const { return m_aDest; }
 };
-
 
 class CPostJson : public CRequest
 {
@@ -101,7 +141,7 @@ class CPostJson : public CRequest
 	char m_aJson[1024];
 
 public:
-	CPostJson(const char *pUrl, bool CanTimeout, const char *pJson);
+	CPostJson(const char *pUrl, CTimeout Timeout, const char *pJson);
 };
 
 bool HttpInit(IStorage *pStorage);

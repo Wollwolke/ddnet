@@ -5,8 +5,15 @@
 
 #include <engine/storage.h>
 
-#include <base/system.h>
 #include <base/hash.h>
+#include <base/system.h>
+
+#include <zlib.h>
+
+enum
+{
+	ITEMTYPE_EX = 0xffff,
+};
 
 // raw datafile access
 class CDataFileReader
@@ -19,7 +26,8 @@ class CDataFileReader
 	int GetInternalItemType(int ExternalType);
 
 public:
-	CDataFileReader() : m_pDataFile(0) {}
+	CDataFileReader() :
+		m_pDataFile(0) {}
 	~CDataFileReader() { Close(); }
 
 	bool IsOpen() const { return m_pDataFile != 0; }
@@ -32,17 +40,17 @@ public:
 	int GetDataSize(int Index);
 	void UnloadData(int Index);
 	void *GetItem(int Index, int *pType, int *pID);
-	int GetItemSize(int Index);
+	int GetItemSize(int Index) const;
 	void GetType(int Type, int *pStart, int *pNum);
 	int FindItemIndex(int Type, int ID);
 	void *FindItem(int Type, int ID);
-	int NumItems();
-	int NumData();
+	int NumItems() const;
+	int NumData() const;
 	void Unload();
 
-	SHA256_DIGEST Sha256();
-	unsigned Crc();
-	int MapSize();
+	SHA256_DIGEST Sha256() const;
+	unsigned Crc() const;
+	int MapSize() const;
 	IOHANDLE File();
 };
 
@@ -75,10 +83,10 @@ class CDataFileWriter
 
 	enum
 	{
-		MAX_ITEM_TYPES=0x10000,
-		MAX_ITEMS=1024,
-		MAX_DATAS=1024,
-		MAX_EXTENDED_ITEM_TYPES=64,
+		MAX_ITEM_TYPES = 0x10000,
+		MAX_ITEMS = 1024,
+		MAX_DATAS = 1024,
+		MAX_EXTENDED_ITEM_TYPES = 64,
 	};
 
 	IOHANDLE m_File;
@@ -98,12 +106,11 @@ public:
 	~CDataFileWriter();
 	void Init();
 	bool OpenFile(class IStorage *pStorage, const char *pFilename, int StorageType = IStorage::TYPE_SAVE);
-	bool Open(class IStorage *pStorage, const char *Filename, int StorageType = IStorage::TYPE_SAVE);
-	int AddData(int Size, void *pData);
+	bool Open(class IStorage *pStorage, const char *pFilename, int StorageType = IStorage::TYPE_SAVE);
+	int AddData(int Size, void *pData, int CompressionLevel = Z_DEFAULT_COMPRESSION);
 	int AddDataSwapped(int Size, void *pData);
 	int AddItem(int Type, int ID, int Size, void *pData);
 	int Finish();
 };
-
 
 #endif

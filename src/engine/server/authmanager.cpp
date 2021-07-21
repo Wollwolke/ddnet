@@ -1,6 +1,6 @@
+#include "authmanager.h"
 #include <base/hash_ctxt.h>
 #include <engine/shared/config.h>
-#include "authmanager.h"
 
 #define ADMIN_IDENT "default_admin"
 #define MOD_IDENT "default_mod"
@@ -66,21 +66,21 @@ int CAuthManager::AddKey(const char *pIdent, const char *pPw, int AuthLevel)
 int CAuthManager::RemoveKey(int Slot)
 {
 	m_aKeys.remove_index_fast(Slot);
-	for(int i = 0; i < (int)(sizeof(m_aDefault) / sizeof(m_aDefault[0])); i++)
+	for(int &Default : m_aDefault)
 	{
-		if(m_aDefault[i] == Slot)
+		if(Default == Slot)
 		{
-			m_aDefault[i] = -1;
+			Default = -1;
 		}
-		else if(m_aDefault[i] == m_aKeys.size())
+		else if(Default == m_aKeys.size())
 		{
-			m_aDefault[i] = Slot;
+			Default = Slot;
 		}
 	}
 	return m_aKeys.size();
 }
 
-int CAuthManager::FindKey(const char *pIdent)
+int CAuthManager::FindKey(const char *pIdent) const
 {
 	for(int i = 0; i < m_aKeys.size(); i++)
 		if(!str_comp(m_aKeys[i].m_aIdent, pIdent))
@@ -89,28 +89,28 @@ int CAuthManager::FindKey(const char *pIdent)
 	return -1;
 }
 
-bool CAuthManager::CheckKey(int Slot, const char *pPw)
+bool CAuthManager::CheckKey(int Slot, const char *pPw) const
 {
 	if(Slot < 0 || Slot >= m_aKeys.size())
 		return false;
 	return m_aKeys[Slot].m_Pw == HashPassword(pPw, m_aKeys[Slot].m_aSalt);
 }
 
-int CAuthManager::DefaultKey(int AuthLevel)
+int CAuthManager::DefaultKey(int AuthLevel) const
 {
 	if(AuthLevel < 0 || AuthLevel > AUTHED_ADMIN)
 		return 0;
 	return m_aDefault[AUTHED_ADMIN - AuthLevel];
 }
 
-int CAuthManager::KeyLevel(int Slot)
+int CAuthManager::KeyLevel(int Slot) const
 {
 	if(Slot < 0 || Slot >= m_aKeys.size())
 		return false;
 	return m_aKeys[Slot].m_Level;
 }
 
-const char *CAuthManager::KeyIdent(int Slot)
+const char *CAuthManager::KeyIdent(int Slot) const
 {
 	if(Slot < 0 || Slot >= m_aKeys.size())
 		return NULL;
@@ -157,12 +157,12 @@ void CAuthManager::AddDefaultKey(int Level, const char *pPw)
 	m_aDefault[Index] = AddKey(IDENTS[Index], pPw, Level);
 }
 
-bool CAuthManager::IsGenerated()
+bool CAuthManager::IsGenerated() const
 {
 	return m_Generated;
 }
 
-int CAuthManager::NumNonDefaultKeys()
+int CAuthManager::NumNonDefaultKeys() const
 {
 	int DefaultCount = (m_aDefault[0] >= 0) + (m_aDefault[1] >= 0) + (m_aDefault[2] >= 0);
 	return m_aKeys.size() - DefaultCount;

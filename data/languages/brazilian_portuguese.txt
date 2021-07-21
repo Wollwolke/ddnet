@@ -17,6 +17,10 @@
 # Rafael Fontenelle   2018-07-04 07:38:13
 # Rafael Fontenelle   2019-04-06 16:49:12
 # Rafael Fontenelle   2019-12-18 02:47:58
+# Rafael Fontenelle   2020-08-27 12:38:07
+# Rafael Fontenelle   2020-09-20 11:00:38
+# Rafael Fontenelle   2021-02-13 07:00:00
+# Rafael Fontenelle   2021-06-10 12:00:00
 ##### /authors #####
 
 ##### translated strings #####
@@ -119,9 +123,6 @@ Controls
 
 Count players only
 == Contar apenas jogadores
-
-Country
-== País
 
 Current
 == Atual
@@ -327,6 +328,7 @@ Ping
 Pistol
 == Pistola
 
+[Demo browser]
 Play
 == Assistir
 
@@ -351,9 +353,6 @@ Please balance teams!
 Prev. weapon
 == Arma anterior
 
-Quality Textures
-== Texturas de qualidade
-
 Quit
 == Sair
 
@@ -368,9 +367,6 @@ Red team wins!
 
 Refresh
 == Atualizar
-
-Refreshing master servers
-== Atualizando servidores mestres
 
 Remote console
 == Console remoto
@@ -438,9 +434,6 @@ Show name plates
 Show only chat messages from friends
 == Mostrar apenas mensagens de amigos
 
-Show only supported
-== Mostrar apenas modos suportados
-
 Skins
 == Skins
 
@@ -465,12 +458,6 @@ Spectator mode
 Spectators
 == Observadores
 
-Standard gametype
-== Tipo de jogo padrão
-
-Standard map
-== Mapa padrão
-
 Stop record
 == Parar a gravação
 
@@ -488,9 +475,6 @@ Team
 
 Team chat
 == Chat do time
-
-Texture Compression
-== Compressão de textura
 
 The audio device couldn't be initialised.
 == O dispositivo de áudio não pôde ser inicializado.
@@ -558,9 +542,6 @@ Yes
 You must restart the game for all settings to take effect.
 == Você deve reiniciar o jogo para que todas as alterações tenham efeito.
 
-Borderless window
-== Janela sem borda
-
 Demo
 == Demo
 
@@ -606,17 +587,11 @@ Crc:
 FSAA samples
 == Amostras FSAA
 
-Inner color
-== Cor interna
-
-\n\nReconnect in %d sec
-== \n\nReconnetar em %d segundos
+Reconnect in %d sec
+== Reconectar em %d segundos
 
 Save ghost
 == Salvar fantasma
-
-Background (entities)
-== Papel de parede (entidades)
 
 Show kill messages
 == Mostrar mensagens de kill
@@ -639,20 +614,11 @@ Update now
 Enable server message sound
 == Habilitar som de mensagem do servidor
 
-second
-== segundo
-
 Show votes window after voting
 == Mostrar janela de votos após votar
 
 HUD
 == HUD
-
-AntiPing limit
-== Limite de AntiPing
-
-Look out!
-== Cuidado!
 
 Show names in chat in team colors
 == Mostrar nomes no chat com cores do time
@@ -669,9 +635,6 @@ Enable team chat sound
 Show other players' hook collision lines
 == Mostra linhas de colisão dos outros jogadores
 
-We will win
-== Nós vamos vencer
-
 Your skin
 == Sua skin
 
@@ -683,9 +646,6 @@ Enable game sounds
 
 DDNet Client needs to be restarted to complete update!
 == O Cliente DDNet precisa ser reiniciado para completar a atualização!
-
-Spectator
-== Observador
 
 Max Screenshots
 == Máximo de capturas de tela
@@ -701,9 +661,6 @@ Hue
 
 Please use a different name
 == Por favor, use um nome diferente
-
-Wait before try for
-== Aguarde antes de tentar para
 
 Show others
 == Mostrar outros
@@ -730,16 +687,13 @@ Follow
 == Seguir
 
 %.2f KiB
-== %.2f KB
+== %.2f KiB
 
 Enable gun sound
 == Habilitar som da arma
 
 Team message
 == Mensagem do time
-
-Manual %3d:%02d  
-== Manual %3d:%02d  
 
 Save the best demo of each race
 == Salvar a melhor demo de cada corrida
@@ -759,9 +713,6 @@ Ghost
 Remove chat
 == Remover chat
 
-Current version: %s
-== Versão atual: %s
-
 Threaded sound loading
 == Carregamento de som em fluxos
 
@@ -774,17 +725,8 @@ Exclude
 DDNet Client updated!
 == DDNet Client atualizado!
 
-Race %3d:%02d  
-== Corrida %3d:%02d  
-
 Type:
 == Tipo:
-
-Background (regular)
-== Fundo de tela (regular)
-
-DDNet %s is out! Download it at DDNet.tw!
-== DDNet %s foi lançado! Baixe-o em DDNet.tw!
 
 Internet
 == Internet
@@ -829,7 +771,7 @@ Sat.
 == Sat.
 
 %.2f MiB
-== %.2f MB
+== %.2f MiB
 
 Refresh Rate
 == Taxa de atualização
@@ -866,12 +808,6 @@ Default zoom
 
 Show score
 == Mostrar pontuação
-
-Show client IDs in Scoreboard
-== Mostrar IDs de clientes no placar
-
-seconds
-== segundos
 
 UI Color
 == Cor da UI
@@ -915,14 +851,8 @@ Map:
 Lht.
 == Lumin.
 
-Auto %3d:%02d  
-== Auto %3d:%02d  
-
 Show clan above name plates
 == Mostrar clã sobre placas de nomes
-
-%d of %d servers, %d players
-== %d/%d servidores, %d jogadores
 
 Enable highlighted chat sound
 == Habilitar som realçado de chat
@@ -930,17 +860,8 @@ Enable highlighted chat sound
 Reset to defaults
 == Redefinir valores
 
-Hello and welcome
-== Olá e bem-vindo
-
 AntiPing: predict weapons
 == AntiPing: predizer armas
-
-Host address
-== Endereço do servidor
-
-Outline color
-== Cor do contorno
 
 Highlighted message
 == Mensagem realçada
@@ -963,14 +884,11 @@ Name plates size
 Grabs
 == Pega
 
-Hi o/
-== Olá o/
-
 Automatically create statboard csv
 == Criar csv de statboard automaticamente
 
 Enable long pain sound (used when shooting in freeze)
-== Habilita som de dor longa (usado ao atirar em congelamento)
+== Habilitar som de dor longa (usado ao atirar em congelamento)
 
 Spree
 == Sequência
@@ -978,14 +896,8 @@ Spree
 Max CSVs
 == CSVs máx
 
-Friend
-== Amigo
-
 Friend message
 == Mensagem de amigo
-
-\xEE\x85\x8B
-== \xEE\x85\x8B
 
 Fat skins (DDFat)
 == Skins Fat (DDFat)
@@ -1008,14 +920,11 @@ Preinit VBO (iGPUs only)
 Activate
 == Ativar
 
-Multiple texture units (disable for MacOS)
+Multiple texture units (disable for macOS)
 == Várias unidades de textura (desabilite para macOS)
 
-Use OpenGL 3.3 (experimental)
-== Usar OpenGL 3.3 (experimental)
-
 UI mouse s.
-== s. mouse UI
+== Sens. mouse de UI
 
 File already exists, do you want to overwrite it?
 == O arquivo já existe, você deseja sobrescrevê-lo?
@@ -1032,8 +941,11 @@ Vanilla skins only
 Date
 == Data
 
-Show DDNet map finishes in server browser\n(transmits your player name to info.ddnet.tw)
-== Mostrar finalizações de mapas do DDNet no navegador do servidor\n(transmite seu nome de jogador para info.ddnet.tw)
+Show DDNet map finishes in server browser
+== Mostrar finalizações de mapas do DDNet no navegador do servidor
+
+transmits your player name to info2.ddnet.tw
+== transmite seu nome de jogador para info2.ddnet.tw
 
 Reload
 == Recarregar
@@ -1048,7 +960,7 @@ Update failed! Check log...
 == 1 nova menção
 
 Fetch Info
-== Obter informações
+== Obter info
 
 %d new mentions
 == %d novas menções
@@ -1084,7 +996,7 @@ Length
 == 9+ novas menções
 
 Hammerfly dummy
-== Dummy de hammerfly
+== Hammerfly dummy
 
 Lock team
 == Travar time
@@ -1134,9 +1046,6 @@ Pause
 Converse
 == Conversar
 
-Replay %3d:%02d  
-== Reproduzir %3d:%02d
-
 Successfully saved the replay!
 == A reprodução foi salva com sucesso
 
@@ -1152,46 +1061,276 @@ Zoom in
 Zoom out
 == Zoom out
 
-##### generated by copy_fix.py, please translate this #####
-
-Video name:
-== 
-
-Use high DPI
-== 
-
-Render
-== 
-
 Server best:
-== 
-
-DDraceNetwork is a cooperative online game where the goal is for you and your group of tees to reach the finish line of the map. As a newcomer you should start on Novice servers, which host the easiest maps. Consider the ping to choose a server close to you.\n\nThe maps contain freeze, which temporarily make a tee unable to move. You have to work together to get through these parts.\n\nThe mouse wheel changes weapons. Hammer (left mouse) can be used to hit other tees and wake them up from being frozen.\n\nHook (right mouse) can be used to swing through the map and to hook other tees to you.\n\nMost importantly communication is key: There is no tutorial so you'll have to chat (t key) with other players to learn the basics and tricks of the game.\n\nIt's recommended that you check the settings to adjust them to your liking before joining a server.\n\nPlease enter your nick name below.
-== 
+== Melhor servidor:
 
 Personal best:
-== 
-
-Replace video
-== 
+== Melhor pessoal:
 
 Learn
-== 
-
-Video speed:
-== 
+== Aprender
 
 Render demo
-== 
+== Renderizar demo
 
-SHA256:
-== 
+Replace video
+== Substituir vídeo
+
+DDraceNetwork is a cooperative online game where the goal is for you and your group of tees to reach the finish line of the map. As a newcomer you should start on Novice servers, which host the easiest maps. Consider the ping to choose a server close to you.
+== DDraceNetwork é um jogo online cooperativo cujo objetivo é você e seu grupo de tees chegarem à linha de chegada do mapa. Como um novato, você deve começar nos servidores Novice, que hospedam os mapas mais fáceis. Considere o ping para escolher um servidor próximo a você.
+
+The maps contain freeze, which temporarily make a tee unable to move. You have to work together to get through these parts.
+== Os mapas contêm congelamento, o que temporariamente torna um tee incapaz de se mover. Você tem que trabalhar junto para passar por essas partes.
+
+The mouse wheel changes weapons. Hammer (left mouse) can be used to hit other tees and wake them up from being frozen.
+== A roda do mouse muda de arma. O martelo (botão esquerdo do mouse) pode ser usado para acertar outros tees e acordá-los do congelamento.
+
+Hook (right mouse) can be used to swing through the map and to hook other tees to you.
+== O gancho (botão direito do mouse) pode ser usado para balançar pelo mapa e agarrar outros tees em você.
+
+Most importantly communication is key: There is no tutorial so you'll have to chat (t key) with other players to learn the basics and tricks of the game.
+== Mais importante ainda, a comunicação é a chave: não há um tutorial, então você terá que conversar (tecla t) com outros jogadores para aprender o básico e os truques do jogo.
+
+Use k key to kill (restart), q to pause and watch other players. See settings for other key binds.
+== Use a tecla k para se matar (reiniciar), q para pausar e assistir outros jogadores. Veja as configurações para outras combinações de teclas.
+
+It's recommended that you check the settings to adjust them to your liking before joining a server.
+== É recomendado que você verifique as configurações para ajustá-las ao seu gosto antes de entrar em um servidor.
+
+Please enter your nickname below.
+== Por favor, insira seu apelido abaixo.
 
 Destination file already exist
-== 
+== O arquivo de destino já existe
 
-DecSpeed
-== 
+Video name:
+== Nome do vídeo
 
-IncSpeed
-== 
+Render
+== Renderizar
+
+Connect Dummy
+== Conectar dummy
+
+Use high DPI
+== Usar DPI alta
+
+Client message
+== Mensagem do cliente
+
+Show others (own team only)
+== Mostrar outras (próprio time apenas)
+
+Warning
+== Atenção
+
+Country / Region
+== País / Região
+
+Speed
+== Velocidade
+
+%d of %d servers
+== %d de %d servidores
+
+%d of %d server
+== %d de %d servidor
+
+%d players
+== %d jogadores
+
+%d player
+== %d jogador
+
+Skip the main menu
+== Pular o menu principal
+
+Download skins
+== Baixar skins
+
+https://wiki.ddnet.tw/
+== https://wiki.ddnet.tw/
+
+Website
+== Site
+
+Settings
+== Configurações
+
+Stop server
+== Parar servidor
+
+Run server
+== Iniciar servidor
+
+Server executable not found, can't run server
+== Executável de servidor não encontrado, não foi possível executar o servidor
+
+Editor
+== Editor
+
+[Start menu]
+Play
+== Jogar
+
+Saving ddnet-settings.cfg failed
+== Falha ao salvar ddnet-settings.cfg
+
+Theme
+== Tema
+
+Demos directory
+== Diretório de demos
+
+Themes directory
+== Diretório de temas
+
+Skin Database
+== Banco de Dados de Skins
+
+Skins directory
+== Diretório de skins
+
+Background music volume
+== Volume da música de fundo
+
+Assets
+== Ativos
+
+Use current map as background
+== Usar o mapa atual como plano de fundo
+
+Entities
+== Entidades
+
+Emoticons
+== Emoticons
+
+Particles
+== Partículas
+
+Assets directory
+== Diretório de ativos
+
+Manual
+== Manual
+
+Race
+== Corrida
+
+Auto
+== Auto
+
+Replay
+== Reproduzir
+
+Debug mode enabled. Press Ctrl+Shift+D to disable debug mode.
+== Modo de depuração habilitado. Pressione Ctrl+Shift+D para desabilitar o modo de depuração.
+
+Existing Player
+== Jogador existente
+
+Your nickname '%s' is already used (%d points). Do you still want to use it?
+== Seu apelido "%s" já está sendo usado (%d pontos). Ainda assim, você deseja usá-lo?
+
+Checking for existing player with your name
+== Conferindo por jogador existente com seu nome
+
+Smooth Dynamic Camera
+== Câmera dinâmica suave
+
+Game sound volume
+== Volume de som do jogo
+
+Chat sound volume
+== Volume de som do chat
+
+Use old chat style
+== Usar estilo de chat antigo
+
+The width of texture %s is not divisible by %d, or the height is not divisible by %d, which might cause visual bugs.
+== A largura da textura %s não é divisível por %d ou a altura não é divisível por %d, o que pode causar erros visuais.
+
+Dummy
+== Dummy
+
+Show client IDs
+== Mostrar IDs de cliente
+
+Laser Outline Color
+== Cor de contorno do laser
+
+Laser Inner Color
+== Cor interna do laser
+
+Preview
+== Visualizar
+
+Background
+== Plano de fundo
+
+Entities Background color
+== Cor de fundo das entidades
+
+Regular Background Color
+== Cor de fundo comum
+
+AFR
+== AFR
+
+ASI
+== ASI
+
+AUS
+== AUS
+
+EUR
+== EUR
+
+NA
+== NA
+
+SA
+== SA
+
+CHN
+== CHN
+
+Getting server list from master server
+== Obtendo lista de servidores do servidor mestre
+
+Leak IP
+== Vazar IP
+
+Chat command
+== Comando de chat
+
+Windowed
+== Janela
+
+Windowed borderless
+== Janela sem borda
+
+Desktop fullscreen
+== Tela cheia de desktop
+
+Use modern OpenGL
+== Usar OpenGL moderno
+
+Hookline
+== Linha do gancho
+
+No hit
+== Sem acerto
+
+Hookable
+== Enganchável
+
+Tee
+== Tee
+
+Discord
+== Discord
+
+https://ddnet.tw/discord
+== https://ddnet.tw/discord

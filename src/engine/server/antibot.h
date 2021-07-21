@@ -22,6 +22,7 @@ class CAntibot : public IEngineAntibot
 	static void Send(int ClientID, const void *pData, int Size, int Flags, void *pUser);
 	static void Log(const char *pMessage, void *pUser);
 	static void Report(int ClientID, const char *pMessage, void *pUser);
+
 public:
 	CAntibot();
 	virtual ~CAntibot();
@@ -30,9 +31,11 @@ public:
 	virtual void Init();
 
 	virtual void OnEngineTick();
-	virtual void OnEngineClientJoin(int ClientID);
+	virtual void OnEngineClientJoin(int ClientID, bool Sixup);
 	virtual void OnEngineClientDrop(int ClientID, const char *pReason);
-	virtual void OnEngineClientMessage(int ClientID, const void *pData, int Size, int Flags);
+	virtual bool OnEngineClientMessage(int ClientID, const void *pData, int Size, int Flags);
+	virtual bool OnEngineServerMessage(int ClientID, const void *pData, int Size, int Flags);
+	virtual bool OnEngineSimulateClientMessage(int *pClientID, void *pBuffer, int BufferSize, int *pOutSize, int *pFlags);
 
 	// Game
 	virtual void RoundStart(class IGameServer *pGameServer);

@@ -5,20 +5,32 @@
 
 #include <engine/map.h>
 #include <engine/shared/protocol.h>
+#include <game/client/ui.h>
 
 #include "kernel.h"
 
 #define DDNET_INFO "ddnet-info.json"
 
-/*
-	Structure: CServerInfo
-*/
 class CServerInfo
 {
 public:
-	/*
-		Structure: CInfoClient
-	*/
+	enum
+	{
+		LOC_UNKNOWN = 0,
+		LOC_AFRICA,
+		LOC_ASIA,
+		LOC_AUSTRALIA,
+		LOC_EUROPE,
+		LOC_NORTH_AMERICA,
+		LOC_SOUTH_AMERICA,
+		// Special case China because it has an exceptionally bad
+		// connection to the outside due to the Great Firewall of
+		// China:
+		// https://en.wikipedia.org/w/index.php?title=Great_Firewall&oldid=1019589632
+		LOC_CHINA,
+		NUM_LOCS,
+	};
+
 	class CClient
 	{
 	public:
@@ -31,11 +43,10 @@ public:
 		int m_FriendState;
 	};
 
-	int m_SortedIndex;
 	int m_ServerIndex;
 
 	int m_Type;
-	uint64 m_ReceivedPackets;
+	uint64_t m_ReceivedPackets;
 	int m_NumReceivedClients;
 
 	NETADDR m_NetAddr;
@@ -50,6 +61,8 @@ public:
 	int m_Flags;
 	bool m_Favorite;
 	bool m_Official;
+	int m_Location;
+	bool m_LatencyIsEstimated;
 	int m_Latency; // in ms
 	int m_HasRank;
 	char m_aGameType[16];
@@ -61,6 +74,11 @@ public:
 	char m_aAddress[NETADDR_MAXSTRSIZE];
 	CClient m_aClients[MAX_CLIENTS];
 	mutable int m_NumFilteredPlayers;
+
+	mutable CUIElement *m_pUIElement;
+
+	static int EstimateLatency(int Loc1, int Loc2);
+	static bool ParseLocation(int *pResult, const char *pString);
 };
 
 bool IsVanilla(const CServerInfo *pInfo);
@@ -72,6 +90,7 @@ bool IsFastCap(const CServerInfo *pInfo);
 bool IsDDRace(const CServerInfo *pInfo);
 bool IsDDNet(const CServerInfo *pInfo);
 bool IsBlockWorlds(const CServerInfo *pInfo);
+bool IsCity(const CServerInfo *pInfo);
 
 bool Is64Player(const CServerInfo *pInfo);
 bool IsPlus(const CServerInfo *pInfo);
@@ -80,7 +99,6 @@ class IServerBrowser : public IInterface
 {
 	MACRO_INTERFACE("serverbrowser", 0)
 public:
-
 	/* Constants: Server Browser Sorting
 		SORT_NAME - Sort by name.
 		SORT_PING - Sort by ping.
@@ -88,16 +106,17 @@ public:
 		SORT_GAMETYPE - Sort by game type. DM, TDM etc.
 		SORT_NUMPLAYERS - Sort after how many players there are on the server.
 	*/
-	enum{
+	enum
+	{
 		SORT_NAME = 0,
 		SORT_PING,
 		SORT_MAP,
 		SORT_GAMETYPE,
 		SORT_NUMPLAYERS,
 
-		QUICK_SERVERNAME=1,
-		QUICK_PLAYER=2,
-		QUICK_MAPNAME=4,
+		QUICK_SERVERNAME = 1,
+		QUICK_PLAYER = 2,
+		QUICK_MAPNAME = 4,
 
 		TYPE_NONE = 0,
 		TYPE_INTERNET = 1,
@@ -106,20 +125,21 @@ public:
 		TYPE_DDNET = 4,
 		TYPE_KOG = 5,
 
-		SET_MASTER_ADD=1,
+		SET_MASTER_ADD = 1,
 		SET_FAV_ADD,
 		SET_DDNET_ADD,
 		SET_KOG_ADD,
 		SET_TOKEN,
+		SET_HTTPINFO,
 
-		NETWORK_DDNET=0,
-		NETWORK_KOG=1,
+		NETWORK_DDNET = 0,
+		NETWORK_KOG = 1,
 		NUM_NETWORKS,
 	};
 
 	virtual void Refresh(int Type) = 0;
+	virtual bool IsGettingServerlist() const = 0;
 	virtual bool IsRefreshing() const = 0;
-	virtual bool IsRefreshingMasters() const = 0;
 	virtual int LoadingProgression() const = 0;
 
 	virtual int NumServers() const = 0;
@@ -130,8 +150,11 @@ public:
 	virtual int NumSortedServers() const = 0;
 	virtual const CServerInfo *SortedGet(int Index) const = 0;
 
+	virtual bool GotInfo(const NETADDR &Addr) const = 0;
 	virtual bool IsFavorite(const NETADDR &Addr) const = 0;
+	virtual bool IsFavoritePingAllowed(const NETADDR &Addr) const = 0;
 	virtual void AddFavorite(const NETADDR &Addr) = 0;
+	virtual void FavoriteAllowPing(const NETADDR &Addr, bool AllowPing) = 0;
 	virtual void RemoveFavorite(const NETADDR &Addr) = 0;
 
 	virtual int NumCountries(int Network) = 0;

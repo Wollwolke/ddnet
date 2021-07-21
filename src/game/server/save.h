@@ -1,29 +1,36 @@
 #ifndef GAME_SERVER_SAVE_H
 #define GAME_SERVER_SAVE_H
 
-#include "entities/character.h"
+#include <engine/shared/protocol.h>
+#include <game/generated/protocol.h>
+#include <game/server/gamecontroller.h>
+
 class IGameController;
 class CGameContext;
+class CCharacter;
+class CSaveTeam;
 
 class CSaveTee
 {
 public:
 	CSaveTee();
 	~CSaveTee();
-	void save(CCharacter* pchr);
-	void load(CCharacter* pchr, int Team);
-	char* GetString();
-	int LoadString(const char* String);
+	void Save(CCharacter *pchr);
+	void Load(CCharacter *pchr, int Team);
+	char *GetString(const CSaveTeam *pTeam);
+	int FromString(const char *String);
+	void LoadHookedPlayer(const CSaveTeam *pTeam);
+	bool IsHooking() const;
 	vec2 GetPos() const { return m_Pos; }
-	const char* GetName() const { return m_aName; }
+	const char *GetName() const { return m_aName; }
 	int GetClientID() const { return m_ClientID; }
 	void SetClientID(int ClientID) { m_ClientID = ClientID; };
 
 private:
 	int m_ClientID;
 
-	char m_aString [2048];
-	char m_aName [16];
+	char m_aString[2048];
+	char m_aName[16];
 
 	int m_Alive;
 	int m_Paused;
@@ -39,7 +46,6 @@ private:
 		int m_Ammo;
 		int m_Ammocost;
 		int m_Got;
-
 	} m_aWeapons[NUM_WEAPONS];
 
 	int m_LastWeapon;
@@ -88,6 +94,16 @@ private:
 	vec2 m_HookTeleBase;
 	int m_HookTick;
 	int m_HookState;
+	int m_HookedPlayer;
+	int m_NewHook;
+
+	// player input
+	int m_InputDirection;
+	int m_InputJump;
+	int m_InputFire;
+	int m_InputHook;
+
+	int m_ReloadTimer;
 
 	char m_aGameUuid[UUID_MAXSTRSIZE];
 };
@@ -95,24 +111,25 @@ private:
 class CSaveTeam
 {
 public:
-	CSaveTeam(IGameController* Controller);
+	CSaveTeam(IGameController *Controller);
 	~CSaveTeam();
-	char* GetString();
+	char *GetString();
 	int GetMembersCount() const { return m_MembersCount; }
 	// MatchPlayers has to be called afterwards
-	int LoadString(const char* String);
+	int FromString(const char *String);
 	// returns true if a team can load, otherwise writes a nice error Message in pMessage
 	bool MatchPlayers(const char (*paNames)[MAX_NAME_LENGTH], const int *pClientID, int NumPlayer, char *pMessage, int MessageLen);
-	int save(int Team);
-	void load(int Team);
-	CSaveTee* m_pSavedTees;
+	int Save(int Team);
+	void Load(int Team, bool KeepCurrentWeakStrong);
+	CSaveTee *m_pSavedTees;
 
 	// returns true if an error occured
 	static bool HandleSaveError(int Result, int ClientID, CGameContext *pGameContext);
-private:
-	CCharacter* MatchCharacter(int ClientID, int SaveID);
 
-	IGameController* m_pController;
+private:
+	CCharacter *MatchCharacter(int ClientID, int SaveID, bool KeepCurrentWeakStrong);
+
+	IGameController *m_pController;
 
 	char m_aString[65536];
 
@@ -122,7 +139,7 @@ private:
 		int m_EndTime;
 		int m_Type;
 	};
-	SSimpleSwitchers* m_pSwitchers;
+	SSimpleSwitchers *m_pSwitchers;
 
 	int m_TeamState;
 	int m_MembersCount;

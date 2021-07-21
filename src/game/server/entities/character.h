@@ -5,21 +5,11 @@
 
 #include <engine/antibot.h>
 #include <game/server/entity.h>
-#include <game/generated/server_data.h>
-#include <game/generated/protocol.h>
-
-#include <game/gamecore.h>
+#include <game/server/save.h>
 
 class CAntibot;
 class CGameTeams;
 struct CAntibotCharacterData;
-
-enum
-{
-	WEAPON_GAME = -3, // team switching etc
-	WEAPON_SELF = -2, // console kill command
-	WEAPON_WORLD = -1, // death tiles etc
-};
 
 enum
 {
@@ -50,8 +40,6 @@ public:
 	virtual void TickDefered();
 	virtual void TickPaused();
 	virtual void Snap(int SnappingClient);
-	virtual int NetworkClipped(int SnappingClient);
-	virtual int NetworkClipped(int SnappingClient, vec2 CheckPos);
 
 	bool IsGrounded();
 
@@ -66,6 +54,7 @@ public:
 
 	void OnPredictedInput(CNetObj_PlayerInput *pNewInput);
 	void OnDirectInput(CNetObj_PlayerInput *pNewInput);
+	void ResetHook();
 	void ResetInput();
 	void FireWeapon();
 
@@ -81,12 +70,13 @@ public:
 	void GiveWeapon(int Weapon, bool Remove = false);
 	void GiveNinja();
 	void RemoveNinja();
+	void SetEndlessHook(bool Enable);
 
 	void SetEmote(int Emote, int Tick);
 
 	void Rescue();
 
-	int NeededFaketuning() { return m_NeededFaketuning;}
+	int NeededFaketuning() { return m_NeededFaketuning; }
 	bool IsAlive() const { return m_Alive; }
 	bool IsPaused() const { return m_Paused; }
 	class CPlayer *GetPlayer() { return m_pPlayer; }
@@ -111,9 +101,6 @@ private:
 		bool m_Got;
 
 	} m_aWeapons[NUM_WEAPONS];
-
-	struct WeaponStat m_aPrevSaveWeapons[NUM_WEAPONS];
-	int m_PrevSaveActiveWeapon;
 
 	int m_LastWeapon;
 	int m_QueuedWeapon;
@@ -158,6 +145,10 @@ private:
 
 	// the player core for the physics
 	CCharacterCore m_Core;
+	CGameTeams *m_pTeams = nullptr;
+
+	std::map<int, std::vector<vec2>> *m_pTeleOuts = nullptr;
+	std::map<int, std::vector<vec2>> *m_pTeleCheckOuts = nullptr;
 
 	// info for dead reckoning
 	int m_ReckoningTick; // tick that we are performing dead reckoning From
@@ -173,6 +164,7 @@ private:
 	int m_LastBroadcast;
 	void DDRaceInit();
 	void HandleSkippableTiles(int Index);
+	void SetRescue();
 	void DDRaceTick();
 	void DDRacePostCoreTick();
 	void HandleBroadcast();
@@ -181,17 +173,21 @@ private:
 	IAntibot *Antibot();
 
 	bool m_SetSavePos;
-	vec2 m_PrevSavePos;
+	CSaveTee m_RescueTee;
 	bool m_Solo;
 
 public:
-	CGameTeams* Teams();
+	CGameTeams *Teams() { return m_pTeams; }
+	void SetTeams(CGameTeams *pTeams);
+	void SetTeleports(std::map<int, std::vector<vec2>> *pTeleOuts, std::map<int, std::vector<vec2>> *pTeleCheckOuts);
+
 	void FillAntibot(CAntibotCharacterData *pData);
 	void Pause(bool Pause);
 	bool Freeze(int Time);
 	bool Freeze();
 	bool UnFreeze();
 	void GiveAllWeapons();
+	void ResetPickups();
 	int m_DDRaceState;
 	int Team();
 	bool CanCollide(int ClientID);
@@ -209,11 +205,11 @@ public:
 	bool m_FreezeHammer;
 	enum
 	{
-		HIT_ALL=0,
-		DISABLE_HIT_HAMMER=1,
-		DISABLE_HIT_SHOTGUN=2,
-		DISABLE_HIT_GRENADE=4,
-		DISABLE_HIT_LASER=8
+		HIT_ALL = 0,
+		DISABLE_HIT_HAMMER = 1,
+		DISABLE_HIT_SHOTGUN = 2,
+		DISABLE_HIT_GRENADE = 4,
+		DISABLE_HIT_LASER = 8
 	};
 	int m_Hit;
 	int m_TuneZone;
@@ -233,8 +229,8 @@ public:
 	int m_MoveRestrictions;
 
 	vec2 m_Intersection;
-	int64 m_LastStartWarning;
-	int64 m_LastRescue;
+	int64_t m_LastStartWarning;
+	int64_t m_LastRescue;
 	bool m_LastRefillJumps;
 	bool m_LastPenalty;
 	bool m_LastBonus;
@@ -256,17 +252,17 @@ public:
 	void SetArmor(int Armor) { m_Armor = Armor; };
 	CCharacterCore GetCore() { return m_Core; };
 	void SetCore(CCharacterCore Core) { m_Core = Core; };
-	CCharacterCore* Core() { return &m_Core; };
+	CCharacterCore *Core() { return &m_Core; };
 	bool GetWeaponGot(int Type) { return m_aWeapons[Type].m_Got; };
 	void SetWeaponGot(int Type, bool Value) { m_aWeapons[Type].m_Got = Value; };
 	int GetWeaponAmmo(int Type) { return m_aWeapons[Type].m_Ammo; };
 	void SetWeaponAmmo(int Type, int Value) { m_aWeapons[Type].m_Ammo = Value; };
 	bool IsAlive() { return m_Alive; };
-	void SetEmoteType(int EmoteType) { m_EmoteType = EmoteType; };
-	void SetEmoteStop(int EmoteStop) { m_EmoteStop = EmoteStop; };
 	void SetNinjaActivationDir(vec2 ActivationDir) { m_Ninja.m_ActivationDir = ActivationDir; };
 	void SetNinjaActivationTick(int ActivationTick) { m_Ninja.m_ActivationTick = ActivationTick; };
 	void SetNinjaCurrentMoveTime(int CurrentMoveTime) { m_Ninja.m_CurrentMoveTime = CurrentMoveTime; };
+
+	int GetLastAction() const { return m_LastAction; }
 
 	bool HasTelegunGun() { return m_Core.m_HasTelegunGun; };
 	bool HasTelegunGrenade() { return m_Core.m_HasTelegunGrenade; };

@@ -7,6 +7,7 @@
 class CKillMessages : public CComponent
 {
 	int m_SpriteQuadContainerIndex;
+
 public:
 	// kill messages
 	struct CKillMsg
@@ -43,6 +44,10 @@ public:
 		MAX_KILLMSGS = 5,
 	};
 
+private:
+	void CreateKillmessageNamesIfNotCreated(CKillMsg &Kill);
+
+public:
 	CKillMsg m_aKillmsgs[MAX_KILLMSGS];
 	int m_KillmsgCurrent;
 
@@ -51,6 +56,8 @@ public:
 	virtual void OnRender();
 	virtual void OnMessage(int MsgType, void *pRawMsg);
 	virtual void OnInit();
+
+	void RefindSkins();
 };
 
 #endif

@@ -3,32 +3,32 @@
 #ifndef GAME_CLIENT_COMPONENTS_CONTROLS_H
 #define GAME_CLIENT_COMPONENTS_CONTROLS_H
 #include <SDL_joystick.h>
-#include <base/vmath.h>
 #include <base/system.h>
+#include <base/vmath.h>
 #include <game/client/component.h>
 
 class CControls : public CComponent
 {
 public:
-	vec2 m_MousePos[2];
-	vec2 m_TargetPos[2];
+	vec2 m_MousePos[NUM_DUMMIES];
+	vec2 m_TargetPos[NUM_DUMMIES];
 	float m_OldMouseX;
 	float m_OldMouseY;
 	SDL_Joystick *m_Joystick;
 	bool m_JoystickFirePressed;
 	bool m_JoystickRunPressed;
-	int64 m_JoystickTapTime;
+	int64_t m_JoystickTapTime;
 
 	SDL_Joystick *m_Gamepad;
 	bool m_UsingGamepad;
 
 	int m_AmmoCount[NUM_WEAPONS];
 
-	CNetObj_PlayerInput m_InputData[2];
-	CNetObj_PlayerInput m_LastData[2];
-	int m_InputDirectionLeft[2];
-	int m_InputDirectionRight[2];
-	int m_ShowHookColl[2];
+	CNetObj_PlayerInput m_InputData[NUM_DUMMIES];
+	CNetObj_PlayerInput m_LastData[NUM_DUMMIES];
+	int m_InputDirectionLeft[NUM_DUMMIES];
+	int m_InputDirectionRight[NUM_DUMMIES];
+	int m_ShowHookColl[NUM_DUMMIES];
 	int m_LastDummy;
 	int m_OtherFire;
 

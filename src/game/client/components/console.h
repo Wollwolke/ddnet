@@ -22,11 +22,11 @@ class CGameConsole : public CComponent
 		struct CBacklogEntry
 		{
 			float m_YOffset;
-			bool m_Highlighted;
+			ColorRGBA m_PrintColor;
 			char m_aText[1];
 		};
-		TStaticRingBuffer<CBacklogEntry, 64*1024, CRingBufferBase::FLAG_RECYCLE> m_Backlog;
-		TStaticRingBuffer<char, 64*1024, CRingBufferBase::FLAG_RECYCLE> m_History;
+		CStaticRingBuffer<CBacklogEntry, 64 * 1024, CRingBufferBase::FLAG_RECYCLE> m_Backlog;
+		CStaticRingBuffer<char, 64 * 1024, CRingBufferBase::FLAG_RECYCLE> m_History;
 		char *m_pHistoryEntry;
 
 		CLineInput m_Input;
@@ -61,7 +61,7 @@ class CGameConsole : public CComponent
 		void ExecuteLine(const char *pLine);
 
 		void OnInput(IInput::CEvent Event);
-		void PrintLine(const char *pLine, bool Highlighted = false);
+		void PrintLine(const char *pLine, ColorRGBA PrintColor = {1, 1, 1, 1});
 
 		const char *GetString() const { return m_Input.GetString(); }
 		static void PossibleCommandsCompleteCallback(const char *pStr, void *pUser);
@@ -85,7 +85,7 @@ class CGameConsole : public CComponent
 	void Dump(int Type);
 
 	static void PossibleCommandsRenderCallback(const char *pStr, void *pUser);
-	static void ClientConsolePrintCallback(const char *pStr, void *pUserData, bool Highlighted);
+	static void ClientConsolePrintCallback(const char *pStr, void *pUserData, ColorRGBA PrintColor = {1, 1, 1, 1});
 	static void ConToggleLocalConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConToggleRemoteConsole(IConsole::IResult *pResult, void *pUserData);
 	static void ConClearLocalConsole(IConsole::IResult *pResult, void *pUserData);
@@ -99,7 +99,7 @@ class CGameConsole : public CComponent
 public:
 	enum
 	{
-		CONSOLETYPE_LOCAL=0,
+		CONSOLETYPE_LOCAL = 0,
 		CONSOLETYPE_REMOTE,
 	};
 

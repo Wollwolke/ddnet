@@ -3,6 +3,8 @@
 #ifndef ENGINE_CLIENT_FRIENDS_H
 #define ENGINE_CLIENT_FRIENDS_H
 
+#include <engine/config.h>
+#include <engine/console.h>
 #include <engine/friends.h>
 
 class CFriends : public IFriends
@@ -15,7 +17,7 @@ class CFriends : public IFriends
 	static void ConRemoveFriend(IConsole::IResult *pResult, void *pUserData);
 	static void ConFriends(IConsole::IResult *pResult, void *pUserData);
 
-	static void ConfigSaveCallback(IConfig *pConfig, void *pUserData);
+	static void ConfigSaveCallback(IConfigManager *pConfigManager, void *pUserData);
 
 public:
 	CFriends();

@@ -30,7 +30,7 @@ public:
 
 	enum
 	{
-		STATE_PENDING=0,
+		STATE_PENDING = 0,
 		STATE_RUNNING,
 		STATE_DONE
 	};
@@ -40,7 +40,7 @@ class CJobPool
 {
 	enum
 	{
-		MAX_THREADS=32
+		MAX_THREADS = 32
 	};
 	int m_NumThreads;
 	void *m_apThreads[MAX_THREADS];
@@ -48,8 +48,8 @@ class CJobPool
 
 	LOCK m_Lock;
 	SEMAPHORE m_Semaphore;
-	std::shared_ptr<IJob> m_pFirstJob;
-	std::shared_ptr<IJob> m_pLastJob;
+	std::shared_ptr<IJob> m_pFirstJob GUARDED_BY(m_Lock);
+	std::shared_ptr<IJob> m_pLastJob GUARDED_BY(m_Lock);
 
 	static void WorkerThread(void *pUser);
 
@@ -59,5 +59,6 @@ public:
 
 	void Init(int NumThreads);
 	void Add(std::shared_ptr<IJob> pJob);
+	static void RunBlocking(IJob *pJob);
 };
 #endif

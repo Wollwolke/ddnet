@@ -19,6 +19,7 @@
 #	Yared Hufkens	2012-02-03 19:57:59
 #	andi103			2012-07-14 11:31:11
 #	timakro			2014-06-30 18:26:59
+#	deen			2020-06-26 18:32:00
 ##### /authors #####
 
 ##### translated strings #####
@@ -118,9 +119,6 @@ Controls
 
 Count players only
 == Nur Spieler zählen
-
-Country
-== Land
 
 Current
 == Aktuell
@@ -326,6 +324,7 @@ Ping
 Pistol
 == Pistole
 
+[Demo browser]
 Play
 == Abspielen
 
@@ -350,9 +349,6 @@ Please balance teams!
 Prev. weapon
 == Vorherige Waffe
 
-Quality Textures
-== Hochauflösende Texturen
-
 Quit
 == Beenden
 
@@ -367,9 +363,6 @@ Red team wins!
 
 Refresh
 == Aktualisieren
-
-Refreshing master servers
-== Aktualisiere Masterserver
 
 Remote console
 == Remote-Konsole
@@ -437,9 +430,6 @@ Show name plates
 Show only chat messages from friends
 == Nur Nachrichten von Freunden zeigen
 
-Show only supported
-== Nur Unterstützte anzeigen
-
 Skins
 == Skins
 
@@ -464,12 +454,6 @@ Spectator mode
 Spectators
 == Zuschauer
 
-Standard gametype
-== Standard-Spieltyp
-
-Standard map
-== Standardkarte
-
 Stop record
 == Aufnahme be.
 
@@ -487,9 +471,6 @@ Team
 
 Team chat
 == Teamchat
-
-Texture Compression
-== Texturkompression
 
 The audio device couldn't be initialised.
 == Das Audiosystem konnte nicht gestartet werden.
@@ -581,9 +562,6 @@ Join game
 FSAA samples
 == Vollbild-Anti-Aliasing
 
-%d of %d servers, %d players
-== %d von %d Servern, %d Spieler
-
 Sound volume
 == Lautstärke
 
@@ -617,9 +595,6 @@ Your skin
 Size:
 == Größe:
 
-﻿
-##### translated strings #####
-
 Reset to defaults
 == Standardeinstellung
 
@@ -641,17 +616,11 @@ Lht.
 UI Color
 == Menüfarbe
 
-Host address
-== Serveradresse
-
 Crc:
 == Prüfsumme:
 
 Alpha
 == Alpha
-
-Current version: %s
-== Aktuelle Version: %s
 
 LAN
 == LAN
@@ -683,15 +652,6 @@ Countries
 Types
 == Typen
 
-Inner color
-== Innere Farbe
-
-\n\nReconnect in %d sec
-== \n\nNeu verbinden in %d Sekunden
-
-Background (entities)
-== Hintergrund (Entities)
-
 Show kill messages
 == Kill-Nachrichten anzeigen
 
@@ -707,17 +667,11 @@ Update now
 Enable server message sound
 == Ton für Server-Nachrichten aktivieren
 
-second
-== Sekunde
-
 Show votes window after voting
 == Abstimmungsfenster nach Abstimmung zeigen
 
 HUD
 == Aussehen
-
-Look out!
-== Pass auf!
 
 Show names in chat in team colors
 == Namen im Chat in Teamfarben anzeigen
@@ -728,9 +682,6 @@ Enable team chat sound
 Show other players' hook collision lines
 == Hakenkollisionen von anderen Spielern anzeigen
 
-We will win
-== Wir werden gewinnen
-
 Deaths
 == Tode
 
@@ -740,11 +691,8 @@ Enable game sounds
 DDNet Client needs to be restarted to complete update!
 == Der DDNet-Client muss neu gestartet werden, um das Update abzuschließen!
 
-Spectator
-== Zuschauer
-
 Show others
-== Andere Teams zeigen
+== Andere zeigen
 
 Restart
 == Neustart
@@ -764,9 +712,6 @@ Team message
 Save the best demo of each race
 == Beste Aufnahme von jedem Rennen speichern
 
-Outline color
-== Äußere Farbe
-
 Are you sure that you want to disconnect?
 == Bist du sicher, dass du die Verbindung trennen möchtest?
 
@@ -778,9 +723,6 @@ Check now
 
 DDNet Client updated!
 == Der DDNet-Client wurde aktualisiert!
-
-Background (regular)
-== Hintergrund (Normal)
 
 AntiPing: predict other players
 == AntiPing: Andere Spieler vorberechnen
@@ -818,12 +760,6 @@ Default zoom
 Show score
 == Punktestand anzeigen
 
-Show client IDs in Scoreboard
-== Client-IDs in der Punktetafel anzeigen
-
-seconds
-== Sekunden
-
 %.2f KiB
 == %.2f KiB
 
@@ -860,9 +796,6 @@ Enable highlighted chat sound
 AntiPing: predict weapons
 == AntiPing: Waffen vorberechnen
 
-Hello and welcome
-== Hallo und willkommen
-
 Highlighted message
 == Hervorgehobene Nachricht
 
@@ -872,26 +805,17 @@ Reset wanted weapon on death
 Switch weapon when out of ammo
 == Waffe wechseln, wenn die Munition leer ist
 
-AntiPing limit
-== AntiPing-Limit
-
 Grabs
 == Griffe
 
 Select a name
 == Namen wählen
 
-Hi o/
-== Hallo o/
-
 Automatically take game over screenshot
 == Automatisch Bildschirmfoto am Spielende aufnehmen
 
 Please use a different name
 == Bitte anderen Namen wählen
-
-Wait before try for
-== Vor dem Versuch warten für
 
 Show console window
 == Konsolenfenster zeigen
@@ -911,9 +835,6 @@ Follow
 Reset
 == Zurücks.
 
-Manual %3d:%02d  
-== Manuell %3d:%02d  
-
 Automatically create statboard csv
 == Automatisch Punktetafel-CSV erstellen
 
@@ -925,12 +846,6 @@ Remove chat
 
 Threaded sound loading
 == Sounds in Threads laden
-
-Race %3d:%02d  
-== Rennen %3d:%02d  
-
-DDNet %s is out! Download it at DDNet.tw!
-== DDNet %s ist da! Download bei DDNet.tw!
 
 Frags
 == Abschüsse
@@ -965,23 +880,14 @@ Spree
 Max CSVs
 == Maximale CSVs
 
-Borderless window
-== Randloses Fenster
-
 Best
 == Beste
 
 Screen
 == Bildschirm
 
-Auto %3d:%02d  
-== Auto %3d:%02d  
-
 Exclude
 == Ausschließen
-
-Friend
-== Freund
 
 Demo
 == Aufnahme
@@ -989,8 +895,8 @@ Demo
 Fat skins (DDFat)
 == Fette Skins (DDFat)
 
-Show DDNet map finishes in server browser\n(transmits your player name to info.ddnet.tw)
-== DDNet-Kartenabschlüsse im Serverbrowser anzeigen\n(überträgt deinen Spielernamen nach info.ddnet.tw)
+Show DDNet map finishes in server browser
+== DDNet-Kartenabschlüsse im Serverbrowser anzeigen
 
 Unfinished map
 == Nicht gewonnene Karte
@@ -1004,7 +910,7 @@ may cause delay
 Preinit VBO (iGPUs only)
 == Preinit-VBO (nur für iGPUs)
 
-Multiple texture units (disable for MacOS)
+Multiple texture units (disable for macOS)
 == Mehrere Textureinheiten (nicht für Mac OS)
 
 UI mouse s.
@@ -1012,9 +918,6 @@ UI mouse s.
 
 Indicate map finish
 == Kartensieg anzeigen
-
-Use OpenGL 3.3 (experimental)
-== OpenGL 3.3 benutzen (experimentell)
 
 File already exists, do you want to overwrite it?
 == Datei existiert bereits, willst du sie überschreiben?
@@ -1027,15 +930,6 @@ Friend message
 
 Date
 == Datum
-
-
-##### generated by copy_fix.py, please translate this #####
-
-
-##### generated by copy_fix.py, please translate this #####
-
-
-##### generated by copy_fix.py, please translate this #####
 
 Skin prefix
 == Skinpräfix
@@ -1071,7 +965,7 @@ Length
 == Länge
 
 Show text entities
-== Entities Text anzeigen
+== Entities-Text anzeigen
 
 Hook collisions
 == Hakenkollisionen
@@ -1121,9 +1015,6 @@ Enable replays
 Toggle dummy
 == Dummy wechseln
 
-Replay %3d:%02d  
-== Wiederholung %3d:%02d  
-
 Markers:
 == Markierungen:
 
@@ -1142,70 +1033,306 @@ Deactivate
 Replay feature is disabled!
 == Wiederholungen sind deaktiviert!
 
-##### generated by copy_fix.py, please translate this #####
+Replace video
+== Video ersetzen
 
-Server best:
-== 
-
-Toggle ghost
-== 
-
-Learn
-== 
-
-\xEE\x85\x8B
-== 
-
-Render demo
-== 
-
-DDraceNetwork is a cooperative online game where the goal is for you and your group of tees to reach the finish line of the map. As a newcomer you should start on Novice servers, which host the easiest maps. Consider the ping to choose a server close to you.\n\nThe maps contain freeze, which temporarily make a tee unable to move. You have to work together to get through these parts.\n\nThe mouse wheel changes weapons. Hammer (left mouse) can be used to hit other tees and wake them up from being frozen.\n\nHook (right mouse) can be used to swing through the map and to hook other tees to you.\n\nMost importantly communication is key: There is no tutorial so you'll have to chat (t key) with other players to learn the basics and tricks of the game.\n\nIt's recommended that you check the settings to adjust them to your liking before joining a server.\n\nPlease enter your nick name below.
-== 
-
-Render
-== 
-
-Pause
-== 
-
-Hammerfly dummy
-== 
-
-DecSpeed
-== 
-
-SHA256:
-== 
-
-Personal best:
-== 
-
-Toggle dyncam
-== 
-
-IncSpeed
-== 
+DDraceNetwork is a cooperative online game where the goal is for you and your group of tees to reach the finish line of the map. As a newcomer you should start on Novice servers, which host the easiest maps. Consider the ping to choose a server close to you.
+== DDraceNetwork ist ein kooperatives Onlinespiel mit dem Ziel für dich und deine Gruppe von Tees das Ziel der Karte zu erreichen. Als Anfänger solltest du auf den Novice-Servern anfangen, auf denen die einfachsten Karten sind. Achte auf den Ping um einen Server in deiner Nähe zu finden.
 
 Default length: %d
-== 
+== Standardlänge: %d
 
-Use high DPI
-== 
+Pause
+== Pause
+
+transmits your player name to info2.ddnet.tw
+== überträgt deinen Spielernamen an info2.ddnet.tw
+
+The mouse wheel changes weapons. Hammer (left mouse) can be used to hit other tees and wake them up from being frozen.
+== Das Mausrad wechselt Waffen. Hammer (linke Maustaste) kann benutzt werden um andere Tees zu schlagen und vom Freeze aufzuwecken.
+
+Server best:
+== Serverbeste:
 
 Destination file already exist
-== 
+== Zieldatei existiert bereits
 
-Replace video
-== 
+Render demo
+== Demo rendern
 
-Video speed:
-== 
+Hammerfly dummy
+== Dummy-Hammerfly
 
-Kill
-== 
+Connect Dummy
+== Dummy verbinden
 
-Video name:
-== 
+Toggle ghost
+== Geist wechseln
 
 Statboard
-== 
+== Statstafel
+
+Reconnect in %d sec
+== In %d Sek. wiederverbinden
+
+Personal best:
+== Persönliche beste:
+
+Kill
+== Kill
+
+Please enter your nickname below.
+== Bitte gib deinen Spitznamen unten ein.
+
+The maps contain freeze, which temporarily make a tee unable to move. You have to work together to get through these parts.
+== Die Map enthält Freeze, dass deinen Tee kurzzeitig unbeweglich macht. Ihr müsst zusammenarbeiten um durch diese Parts zu kommen.
+
+Render
+== Rendern
+
+Hook (right mouse) can be used to swing through the map and to hook other tees to you.
+== Hook (rechte Maustaste) kann benutzt werden um durch die Map zu schwingen und andere Tees zu dir zu ziehen.
+
+It's recommended that you check the settings to adjust them to your liking before joining a server.
+== Es wird empfohlen die Einstellungen nach deinem Geschmack anzupassen bevor du einem Server beitrittst.
+
+Use high DPI
+== Hohe DPI nutzen
+
+Most importantly communication is key: There is no tutorial so you'll have to chat (t key) with other players to learn the basics and tricks of the game.
+== Am wichtigsten ist Kommunikation: Es gibt kein Tutorial, das heißt du musst mit den anderen Spielern schreiben (t-Taste) um die Grundlagen und Tricks des Spiels zu lernen.
+
+Learn
+== Lernen
+
+Video name:
+== Videoname:
+
+Toggle dyncam
+== Dyncam wechseln
+
+Show others (own team only)
+== Andere Spieler zeigen (nur eigenes Team)
+
+Use k key to kill (restart), q to pause and watch other players. See settings for other key binds.
+== Benutze die Taste k um neuzustarten, q zum pausieren und andere Spieler zu beobachten. In den Einstellungen sieht man weitere Tasten.
+
+Client message
+== Client-Nachricht
+
+Country / Region
+== Land / Region
+
+Skip the main menu
+== Hauptmenü überspringen
+
+Settings
+== Einstellungen
+
+Run server
+== Server starten
+
+Stop server
+== Server stoppen
+
+Editor
+== Editor
+
+Download skins
+== Skins herunterladen
+
+Warning
+== Warnung
+
+Speed
+== Geschwindigkeit
+
+Website
+== Website
+
+Server executable not found, can't run server
+== Server-Programm nicht gefunden, kann Server nicht starten
+
+[Start menu]
+Play
+== Spielen
+
+%d of %d servers
+== %d von %d Server
+
+%d of %d server
+== %d von %d Server
+
+%d players
+== %d Spieler
+
+%d player
+== %d Spieler
+
+Theme
+== Theme
+
+Demos directory
+== Demo-Ordner
+
+Themes directory
+== Theme-Ordner
+
+Skin Database
+== Skin-Datenbank
+
+Skins directory
+== Skin-Ordner
+
+Background music volume
+== Hintergrundmusik-Lautstärke
+
+Assets
+== Assets
+
+Entities
+== Entities
+
+Emoticons
+== Emoticons
+
+Particles
+== Partikel
+
+Assets directory
+== Assets-Ordner
+
+https://wiki.ddnet.tw/
+== https://wiki.ddnet.tw/
+
+Saving ddnet-settings.cfg failed
+== ddnet-settings.cfg zu speichern ist fehlgeschlagen
+
+Use current map as background
+== Aktuelle Karte als Hintergrund benutzen
+
+Debug mode enabled. Press Ctrl+Shift+D to disable debug mode.
+== Debug-Modus aktiviert. Drück Strg+Shift+D um den Debug-Modus zu deaktivieren.
+
+Existing Player
+== Existierender Spieler
+
+Your nickname '%s' is already used (%d points). Do you still want to use it?
+== Dein Spitzname '%s' wird bereits genutzt (%d Punkte). Willst du ihn dennoch nutzen?
+
+Checking for existing player with your name
+== Prüfe auf existierenden Spieler mit deinem Namen
+
+Game sound volume
+== Spiel-Lautstärke
+
+Chat sound volume
+== Chat-Lautstärke
+
+Use old chat style
+== Alten Chat-Stil nutzen
+
+Manual
+== Manuell
+
+Race
+== Rennen
+
+Auto
+== Auto
+
+Replay
+== Wiederholung
+
+Smooth Dynamic Camera
+== Weiche Dynamische Kamera
+
+The width of texture %s is not divisible by %d, or the height is not divisible by %d, which might cause visual bugs.
+== Die Breite von Textur %s ist nicht durch %d teilbar, oder die Höhe nicht durch %d teilbar, was Visuelle Fehler verursachen könnte.
+
+Dummy
+== Dummy
+
+Show client IDs
+== Zeige Client-IDs
+
+Laser Outline Color
+== Laser-Konturfarbe
+
+Laser Inner Color
+== Laser-Innenfarbe
+
+Preview
+== Vorschau
+
+Background
+== Hintergrund
+
+Entities Background color
+== Entities-Hintergrundfarbe
+
+Regular Background Color
+== Normale Hintergrundfarbe
+
+Chat command
+== Chat-Befehl
+
+Discord
+== Discord
+
+https://ddnet.tw/discord
+== https://ddnet.tw/discord
+
+AFR
+== AFR
+
+ASI
+== ASI
+
+AUS
+== AUS
+
+EUR
+== EUR
+
+NA
+== NA
+
+SA
+== SA
+
+CHN
+== CHN
+
+Getting server list from master server
+== Hole Serverliste vom Masterserver
+
+Leak IP
+== IP leaken
+
+Windowed
+== Fenster
+
+Windowed borderless
+== Fenster ohne Rand
+
+Desktop fullscreen
+== Desktop-Vollbild
+
+Use modern OpenGL
+== Modernes OpenGL benutzen
+
+Hookline
+== Hooklinie
+
+No hit
+== Kein Treffer
+
+Hookable
+== Hookbar
+
+Tee
+== Tee
+
+Are you sure that you want to disconnect and switch to a different server?
+== Bist du sicher, dass du die Verbindung trennen und zu einem anderen Server wechseln möchtest?

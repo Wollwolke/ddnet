@@ -5,9 +5,9 @@
 
 #include <engine/shared/memheap.h>
 
-#include <game/voting.h>
 #include <game/client/component.h>
 #include <game/client/ui.h>
+#include <game/voting.h>
 
 class CVoting : public CComponent
 {
@@ -16,7 +16,7 @@ class CVoting : public CComponent
 	static void ConCallvote(IConsole::IResult *pResult, void *pUserData);
 	static void ConVote(IConsole::IResult *pResult, void *pUserData);
 
-	int64 m_Closetime;
+	int64_t m_Closetime;
 	char m_aDescription[VOTE_DESC_LENGTH];
 	char m_aReason[VOTE_REASON_LENGTH];
 	int m_Voted;
@@ -50,7 +50,7 @@ public:
 
 	void Vote(int v); // -1 = no, 1 = yes
 
-	int SecondsLeft() { return (m_Closetime - time())/time_freq(); }
+	int SecondsLeft() { return (m_Closetime - time()) / time_freq(); }
 	bool IsVoting() { return m_Closetime != 0; }
 	int TakenChoice() const { return m_Voted; }
 	const char *VoteDescription() const { return m_aDescription; }

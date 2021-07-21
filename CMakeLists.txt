@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 2.8.12...3.19.1)
+if(CMAKE_VERSION VERSION_LESS 3.12)
+  cmake_policy(VERSION ${CMAKE_VERSION})
+endif()
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET 10.9 CACHE INTERNAL "")
 if(CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.9)
@@ -22,19 +25,8 @@ else()
   message(FATAL_ERROR "Couldn't parse version from src/game/version.h")
 endif()
 
-if(POLICY CMP0017)
-  cmake_policy(SET CMP0017 NEW)
-endif()
-
-if(POLICY CMP0048)
-  cmake_policy(SET CMP0048 NEW)
-  if(VERSION_PATCH STREQUAL "0")
-    project(DDNet VERSION ${VERSION_MAJOR}.${VERSION_MINOR})
-  else()
-    project(DDNet VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-  endif()
-else()
-  project(DDNet)
+# Extra support for CMake pre-3.0
+if(NOT POLICY CMP0048)
   set(PROJECT_VERSION_MAJOR ${VERSION_MAJOR})
   set(PROJECT_VERSION_MINOR ${VERSION_MINOR})
   set(PROJECT_VERSION_PATCH ${VERSION_PATCH})
@@ -43,6 +35,11 @@ else()
   else()
     set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
   endif()
+endif()
+if(VERSION_PATCH STREQUAL "0")
+  project(DDNet VERSION ${VERSION_MAJOR}.${VERSION_MINOR})
+else()
+  project(DDNet VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 endif()
 
 set(ORIGINAL_CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH})
@@ -63,6 +60,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(TARGET_OS "linux")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(TARGET_OS "mac")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Haiku")
+  set(TARGET_OS "haiku")
 endif()
 
 include(CheckCCompilerFlag)
@@ -77,24 +76,30 @@ else()
 endif()
 
 set(AUTO_DEPENDENCIES_DEFAULT OFF)
-set(AUTOUPDATE_DEFAULT OFF)
 if(TARGET_OS STREQUAL "windows")
   set(AUTO_DEPENDENCIES_DEFAULT ON)
-  set(AUTOUPDATE_DEFAULT ON)
 elseif(TARGET_OS STREQUAL "linux")
-  set(AUTOUPDATE_DEFAULT ON)
 endif()
 
 option(WEBSOCKETS "Enable websockets support" OFF)
 option(MYSQL "Enable mysql support" OFF)
-option(AUTOUPDATE "Enable the autoupdater" ${AUTOUPDATE_DEFAULT})
+option(AUTOUPDATE "Enable the autoupdater" OFF)
+option(INFORM_UPDATE "Inform about available updates" ON)
 option(VIDEORECORDER "Enable video recording support via FFmpeg" OFF)
 option(UPNP "Enable UPnP support" OFF)
 option(ANTIBOT "Enable support for a dynamic anticheat library" OFF)
 option(CLIENT "Compile client" ON)
 option(DOWNLOAD_GTEST "Download and compile GTest" ${AUTO_DEPENDENCIES_DEFAULT})
+option(STEAM "Build the Steam release version" OFF)
+option(DISCORD "Enable Discord rich presence support" OFF)
+option(DISCORD_DYNAMIC "Enable discovering Discord rich presence libraries at runtime (Linux only)" OFF)
 option(PREFER_BUNDLED_LIBS "Prefer bundled libraries over system libraries" ${AUTO_DEPENDENCIES_DEFAULT})
 option(DEV "Don't generate stuff necessary for packaging" OFF)
+
+# Set version if not explicitly set
+if(NOT VERSION)
+  set(VERSION ${PROJECT_VERSION})
+endif()
 
 set(OpenGL_GL_PREFERENCE LEGACY)
 
@@ -113,9 +118,13 @@ endif()
 
 set(DBG $<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>)
 
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-  src/game/version.h
-)
+if(CMAKE_VERSION VERSION_LESS 3.0)
+  configure_file(src/game/version.h vd.h)
+else()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    src/game/version.h
+  )
+endif()
 
 set(SERVER_EXECUTABLE DDNet-Server CACHE STRING "Name of the built server executable")
 set(CLIENT_EXECUTABLE DDNet CACHE STRING "Name of the build client executable")
@@ -148,7 +157,7 @@ if(CMAKE_GENERATOR STREQUAL "Ninja")
   add_c_compiler_flag_if_supported(OUR_FLAGS -fcolor-diagnostics)
 endif()
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT HAIKU)
   if(CMAKE_VERSION VERSION_LESS 3.1 OR TARGET_OS STREQUAL "mac")
     check_cxx_compiler_flag(-std=gnu++11 FLAG_SUPPORTED_std_gnu__11)
     if(FLAG_SUPPORTED_std_gnu__11)
@@ -164,12 +173,19 @@ if(NOT MSVC)
   # -fstack-protector-all doesn't work on MinGW.
   add_c_compiler_flag_if_supported(OUR_FLAGS -fstack-protector-all)
 
+  # Disable exceptions as DDNet does not use them.
+  add_c_compiler_flag_if_supported(OUR_FLAGS -fno-exceptions)
+
   # Inaccurate floating point numbers cause problems on mingw-w64-gcc when
   # compiling for x86, might cause problems elsewhere. So don't store floats
   # in registers but keep them at higher accuracy.
-
   if(TARGET_ARCH STREQUAL "x86")
     add_c_compiler_flag_if_supported(OUR_FLAGS -ffloat-store)
+  endif()
+
+  # Don't insert timestamps into PEs to keep the build reproducible.
+  if(TARGET_OS STREQUAL "windows")
+    add_c_compiler_flag_if_supported(OUR_FLAGS_LINK -Wl,--no-insert-timestamp)
   endif()
 
   if(TARGET_OS STREQUAL "mac")
@@ -193,11 +209,12 @@ if(NOT MSVC)
   add_c_compiler_flag_if_supported(OUR_FLAGS_OWN -Wduplicated-branches)
   add_c_compiler_flag_if_supported(OUR_FLAGS_OWN -Wlogical-op)
   add_c_compiler_flag_if_supported(OUR_FLAGS_OWN -Wrestrict)
+  add_c_compiler_flag_if_supported(OUR_FLAGS_OWN -Wthread-safety)
   # TODO: Enable for C++ code except gtest
   #add_cxx_compiler_flag_if_supported(OUR_FLAGS_OWN "-Wuseless-cast")
 endif()
 
-if(NOT MSVC)
+if(NOT MSVC AND NOT HAIKU)
   check_c_compiler_flag("-O2;-Wp,-Werror;-D_FORTIFY_SOURCE=2" DEFINE_FORTIFY_SOURCE) # Some distributions define _FORTIFY_SOURCE by themselves.
 endif()
 
@@ -252,6 +269,21 @@ function(set_src VAR GLOBBING DIRECTORY) # ...
   set_glob(${VAR} ${GLOBBING} "c;cpp;h" ${DIRECTORY} ${ARGN})
   set(${VAR} ${${VAR}} PARENT_SCOPE)
 endfunction()
+
+function(set_own_rpath TARGET)
+  if(NOT TARGET_OS STREQUAL "windows" AND NOT TARGET_OS STREQUAL "mac")
+    if(CMAKE_VERSION VERSION_GREATER 3.8 OR CMAKE_VERSION VERSION_EQUAL 3.8)
+      set_property(TARGET ${TARGET} PROPERTY BUILD_RPATH "$ORIGIN")
+    endif()
+    set_property(TARGET ${TARGET} PROPERTY INSTALL_RPATH "$ORIGIN/../lib/ddnet")
+  endif()
+endfunction()
+
+if(NOT TARGET_OS STREQUAL "windows" AND NOT TARGET_OS STREQUAL "mac" AND CMAKE_VERSION VERSION_LESS 3.8)
+  if((CLIENT AND (STEAM OR DISCORD_DYNAMIC)) OR ANTIBOT)
+    message(STATUS "Can't set BUILD_RPATH in CMake before 3.8, pass -Wl,-rpath,'$ORIGIN' manually if you wish to emulate this. Or just install a newer version of CMake...")
+  endif()
+endif()
 
 ########################################################################
 # INITIALIZE TARGET LISTS
@@ -317,12 +349,18 @@ endif()
 find_package(ZLIB)
 find_package(Crypto)
 find_package(Curl)
+if(VIDEORECORDER)
+  find_package(FFMPEG)
+endif()
 find_package(Freetype)
 if(DOWNLOAD_GTEST)
   find_package(Git)
 endif()
 find_package(GLEW)
 find_package(GTest)
+if(UPNP)
+  find_package(Miniupnpc)
+endif()
 if(MYSQL)
   find_package(MySQL)
 else()
@@ -331,14 +369,16 @@ endif()
 find_package(Ogg)
 find_package(Opus)
 find_package(Opusfile)
-if(UPNP)
-  find_package(Miniupnpc)
-endif()
 find_package(Pnglite)
 find_package(PythonInterp 3)
 find_package(SDL2)
-if(VIDEORECORDER)
-  find_package(FFMPEG)
+find_package(SQLite3)
+if(DISCORD)
+  find_package(DiscordSdk)
+endif()
+if(UNIX)
+  # Use -pthread instead of -lpthread to draw dependencies other than libpthread
+  set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 endif()
 find_package(Threads)
 find_package(Wavpack)
@@ -395,6 +435,9 @@ show_dependency_status("Curl" CURL)
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   show_dependency_status("Dmg tools" DMGTOOLS)
 endif()
+if(VIDEORECORDER)
+  show_dependency_status("FFmpeg" FFMPEG)
+endif()
 show_dependency_status("Freetype" FREETYPE)
 if(DOWNLOAD_GTEST)
   show_dependency_status("Git" GIT)
@@ -404,6 +447,9 @@ show_dependency_status("GTest" GTEST)
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
   show_dependency_status("Hdiutil" HDIUTIL)
 endif()
+if(UPNP)
+  show_dependency_status("Miniupnpc" MINIUPNPC)
+endif()
 if(MYSQL)
   show_dependency_status("MySQL" MYSQL)
 endif()
@@ -411,17 +457,15 @@ show_dependency_status("Ogg" OGG)
 show_dependency_status("OpenSSL Crypto" CRYPTO)
 show_dependency_status("Opus" OPUS)
 show_dependency_status("Opusfile" OPUSFILE)
-if(UPNP)
-  show_dependency_status("Miniupnpc" MINIUPNPC)
-endif()
 show_dependency_status("Pnglite" PNGLITE)
 show_dependency_status("PythonInterp" PYTHONINTERP)
 show_dependency_status("SDL2" SDL2)
-if(VIDEORECORDER)
-  show_dependency_status("FFmpeg" FFMPEG)
-endif()
+show_dependency_status("SQLite3" SQLite3)
 show_dependency_status("Wavpack" WAVPACK)
 show_dependency_status("Zlib" ZLIB)
+if(DISCORD)
+  show_dependency_status("DiscordSdk" DiscordSdk)
+endif()
 if(WEBSOCKETS)
   show_dependency_status("Websockets" WEBSOCKETS)
 endif()
@@ -431,6 +475,9 @@ if(CLIENT AND NOT(CURL_FOUND))
 endif()
 if(NOT(PYTHONINTERP_FOUND))
   message(SEND_ERROR "You must install Python to compile DDNet")
+endif()
+if(NOT(SQLite3_FOUND))
+  message(SEND_ERROR "You must install SQLite3 to compile DDNet")
 endif()
 
 if(MYSQL AND NOT(MYSQL_FOUND))
@@ -444,7 +491,17 @@ endif()
 if(UPNP AND NOT(MINIUPNPC_FOUND))
   message(SEND_ERROR "You must install miniupnpc to compile the DDNet server with UPnP support")
 endif()
-
+if(DISCORD AND NOT(DISCORDSDK_FOUND))
+  message(SEND_ERROR "You must install the Discord SDK to compile the DDNet client with Discord support")
+endif()
+if(DISCORD_DYNAMIC)
+  if(TARGET_OS STREQUAL "windows" OR TARGET_OS STREQUAL "mac")
+    message(SEND_ERROR "Dynamically loading the Discord SDK is only supported on Linux")
+  endif()
+  if(NOT DISCORD)
+    message(SEND_ERROR "You must enable the DISCORD flag if you want to link the Discord SDK")
+  endif()
+endif()
 if(CLIENT AND NOT(FREETYPE_FOUND))
   message(SEND_ERROR "You must install Freetype to compile the DDNet client")
 endif()
@@ -483,11 +540,17 @@ elseif(TARGET_OS STREQUAL "mac")
   find_library(OPENGL OpenGL)
   find_library(SECURITY Security)
   set(PLATFORM_CLIENT
-    src/osx/notifications.mm
-    src/osxlaunch/client.m
+    src/macos/notifications.mm
+    src/macoslaunch/client.m
   )
   set(PLATFORM_CLIENT_LIBS ${COCOA} ${OPENGL})
   set(PLATFORM_LIBS ${CARBON} ${SECURITY})
+elseif(TARGET_OS STREQUAL "haiku")
+    set(PLATFORM_CLIENT)
+    find_package(OpenGL)
+    set(PLATFORM_LIBS GL network)
+    set(PLATFORM_CLIENT_LIBS ${OPENGL_gl_LIBRARY})
+    set(PLATFORM_CLIENT_INCLUDE_DIRS ${OPENGL_INCLUDE_DIR})
 else()
   find_package(Notify)
   find_package(OpenGL)
@@ -507,8 +570,7 @@ endif()
 ########################################################################
 
 if(NOT(GTEST_FOUND) AND DOWNLOAD_GTEST)
-  # Change to the 1.9.0 release tag once that works.
-  set(DDNET_GTEST_VERSION 7b6561c56e353100aca8458d7bc49c4e0119bae8)
+  set(DDNET_GTEST_VERSION release-1.10.0) # 703bd9caab50b139428cea1aaff9974ebee5742e
   configure_file(cmake/Download_GTest_CMakeLists.txt.in googletest-download/CMakeLists.txt)
   execute_process(COMMAND ${CMAKE_COMMAND} -G "${CMAKE_GENERATOR}" .
     RESULT_VARIABLE result
@@ -526,6 +588,15 @@ if(NOT(GTEST_FOUND) AND DOWNLOAD_GTEST)
       message(WARNING "Build step for googletest failed: ${result}")
       set(DOWNLOAD_GTEST OFF)
     else()
+      file(GLOB_RECURSE DDNET_GTEST_CMAKELISTS ${CMAKE_BINARY_DIR}/googletest-src/CMakeLists.txt)
+      foreach(file ${DDNET_GTEST_CMAKELISTS})
+        file(READ ${file} CONTENTS)
+        string(REPLACE "cmake_minimum_required(VERSION 2.6.4)" "cmake_minimum_required(VERSION 2.8.12...3.19.1)" CONTENTS "${CONTENTS}")
+        string(REPLACE "cmake_minimum_required(VERSION 2.6.4)" "cmake_minimum_required(VERSION 2.8.12...3.19.1)" CONTENTS "${CONTENTS}")
+        string(REPLACE "cmake_minimum_required(VERSION 2.8.8)" "cmake_minimum_required(VERSION 2.8.12...3.19.1)" CONTENTS "${CONTENTS}")
+        file(WRITE ${file} "${CONTENTS}")
+      endforeach()
+
       # Prevent overriding the parent project's compiler/linker settings on Windows
       set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
@@ -577,6 +648,9 @@ endif()
 
 set(EXPECTED_DATA
   arrow.png
+  assets/entities/comfort/ddnet.png
+  assets/entities/license.txt
+  assets/game/game_06.png
   audio/foley_body_impact-01.wv
   audio/foley_body_impact-02.wv
   audio/foley_body_impact-03.wv
@@ -710,7 +784,7 @@ set(EXPECTED_DATA
   audio/wp_switch-03.wv
   blob.png
   browse_icons.png
-  ca-ddnet.pem
+  censorlist.txt
   console.png
   console_bar.png
   countryflags/AD.png
@@ -983,6 +1057,7 @@ set(EXPECTED_DATA
   editor/entities_clear/blockworlds.png
   editor/entities_clear/ddnet.png
   editor/entities_clear/ddrace.png
+  editor/entities_clear/f-ddrace.png
   editor/entities_clear/fng.png
   editor/entities_clear/race.png
   editor/entities_clear/vanilla.png
@@ -1005,14 +1080,16 @@ set(EXPECTED_DATA
   editor/winter_main.rules
   emoticons.png
   file_icons.png
-  fonts/DejaVuSansCJKName.ttf
-  fonts/DejavuWenQuanYiMicroHei.ttf
+  fonts/DejaVuSans.ttf
+  fonts/GlowSansJCompressed-Book.otf
   fonts/Icons.ttf
+  fonts/SourceHanSansSC-Regular.otf
   game.png
   gui_buttons.png
   gui_cursor.png
   gui_icons.png
   gui_logo.png
+  languages/arabic.txt
   languages/belarusian.txt
   languages/bosnian.txt
   languages/brazilian_portuguese.txt
@@ -1040,6 +1117,7 @@ set(EXPECTED_DATA
   languages/romanian.txt
   languages/russian.txt
   languages/serbian.txt
+  languages/serbian_cyrillic.txt
   languages/simplified_chinese.txt
   languages/slovak.txt
   languages/spanish.txt
@@ -1097,8 +1175,10 @@ set(EXPECTED_DATA
   mapres/winter_mountains.png
   mapres/winter_mountains2.png
   mapres/winter_mountains3.png
-  maps/Goo!.map
-  maps/Kobra\ 4.map
+  maps/Gold\ Mine.map
+  maps/LearnToPlay.map
+  maps/Sunny\ Side\ Up.map
+  maps/Tsunami.map
   maps/ctf1.map
   maps/ctf2.map
   maps/ctf3.map
@@ -1112,67 +1192,44 @@ set(EXPECTED_DATA
   maps/dm7.map
   maps/dm8.map
   maps/dm9.map
+  maps/license.txt
+  maps7/Gold\ Mine.map
+  maps7/LearnToPlay.map
+  maps7/Sunny\ Side\ Up.map
+  maps7/Tsunami.map
+  maps7/readme.txt
+  menuimages/demos.png
+  menuimages/editor.png
+  menuimages/local_server.png
+  menuimages/play_game.png
+  menuimages/settings.png
   particles.png
-  shader/bordertile.frag
-  shader/bordertile.vert
-  shader/bordertileline.frag
-  shader/bordertileline.vert
-  shader/bordertilelinetex.frag
-  shader/bordertilelinetex.vert
-  shader/bordertiletex.frag
-  shader/bordertiletex.vert
+  shader/pipeline.frag
+  shader/pipeline.vert
   shader/prim.frag
   shader/prim.vert
+  shader/primex.frag
+  shader/primex.vert
   shader/quad.frag
   shader/quad.vert
-  shader/quadtex.frag
-  shader/quadtex.vert
-  shader/sprite.frag
-  shader/sprite.vert
   shader/spritemulti.frag
   shader/spritemulti.vert
   shader/text.frag
   shader/text.vert
   shader/tile.frag
   shader/tile.vert
-  shader/tiletex.frag
-  shader/tiletex.vert
-  skins/Ablush\ NeoN.png
   skins/Aoe4leg.png
-  skins/Apish\ Coke.png
-  skins/BadAnqelMonster.png
-  skins/Black\ Phantom\ heinrich5991.png
-  skins/Blind\ r0xr.png
-  skins/DuMoH.png
-  skins/Evil\ Puffi.png
-  skins/Flying\ Silex.png
-  skins/Hidden\ Assassin.png
-  skins/Irradiated\ Sunny.png
-  skins/Mobys\ Skull.png
   skins/PaladiN.png
-  skins/Red\ Coke.png
-  skins/Shadow.png
-  skins/Sonic.png
-  skins/Straw\ Crytek.png
-  skins/Terrorist.png
-  skins/Volt.png
   skins/antiantey.png
-  skins/aqua.png
-  skins/atlas_by_whis.png
-  skins/bauer.png
   skins/beast.png
   skins/blacktee.png
   skins/bluekitty.png
   skins/bluestripe.png
   skins/bomb.png
   skins/brownbear.png
-  skins/bunny.png
-  skins/caesar.png
   skins/cammo.png
   skins/cammostripes.png
-  skins/chera.png
   skins/chinese_by_whis.png
-  skins/clefairy.png
   skins/coala.png
   skins/coala_bluekitty.png
   skins/coala_bluestripe.png
@@ -1193,11 +1250,8 @@ set(EXPECTED_DATA
   skins/demonlimekitty.png
   skins/dino.png
   skins/dragon.png
-  skins/draw.png
-  skins/emo.png
   skins/evil.png
   skins/evilwolfe.png
-  skins/fuzzy_coala.png
   skins/ghost.png
   skins/ghostjtj.png
   skins/giraffe.png
@@ -1206,10 +1260,8 @@ set(EXPECTED_DATA
   skins/greyfox_2.png
   skins/hammie-chew.png
   skins/hammie-whis.png
-  skins/hedgehog.png
   skins/jeet.png
   skins/kintaro_2.png
-  skins/kirby.png
   skins/kitty_bluestripe.png
   skins/kitty_brownbear.png
   skins/kitty_cammo.png
@@ -1225,36 +1277,22 @@ set(EXPECTED_DATA
   skins/kitty_twintri.png
   skins/kitty_warpaint.png
   skins/kitty_x_ninja.png
-  skins/lightbulb.png
+  skins/license.txt
   skins/limekitty.png
-  skins/m&mred.png
-  skins/m&myellow.png
-  skins/masterchief.png
   skins/mermydon-coala.png
   skins/mermydon.png
-  skins/mike.png
-  skins/monstee.png
   skins/mouse.png
   skins/musmann.png
   skins/nanami.png
   skins/nanas.png
-  skins/napoleon.png
   skins/nersif.png
-  skins/nosey.png
   skins/oldman.png
   skins/oldschool.png
-  skins/pbody_by_whis.png
   skins/penguin.png
-  skins/pepsi.png
-  skins/pikminpurple.png
-  skins/pikminwhite.png
-  skins/pikminyellow.png
   skins/pinky.png
   skins/random.png
-  skins/red_bird.png
   skins/redbopp.png
   skins/redstripe.png
-  skins/roman.png
   skins/saddo.png
   skins/santa_bluekitty.png
   skins/santa_bluestripe.png
@@ -1272,20 +1310,8 @@ set(EXPECTED_DATA
   skins/santa_twinbop.png
   skins/santa_twintri.png
   skins/santa_warpaint.png
-  skins/savage.png
-  skins/t2.png
-  skins/tails.png
-  skins/tank.png
-  skins/tauren.png
   skins/teerasta.png
-  skins/teledipsy.png
-  skins/telelaalaa.png
-  skins/telepo.png
-  skins/teletinkywinky.png
   skins/toptri.png
-  skins/troll.png
-  skins/ts2_contest_skin.png
-  skins/tweety.png
   skins/twinbop.png
   skins/twintri.png
   skins/veteran.png
@@ -1295,10 +1321,27 @@ set(EXPECTED_DATA
   skins/whis.png
   skins/x_ninja.png
   skins/x_spec.png
+  themes/auto.png
+  themes/autumn.png
+  themes/autumn_day.map
+  themes/autumn_night.map
+  themes/heavens.png
+  themes/heavens_day.map
+  themes/heavens_night.map
+  themes/jungle.png
+  themes/jungle_day.map
+  themes/jungle_night.map
+  themes/newyear.map
+  themes/newyear.png
+  themes/none.png
+  themes/rand.png
+  themes/winter.png
+  themes/winter_day.map
+  themes/winter_night.map
   wordlist.txt
 )
 
-set_glob(DATA GLOB_RECURSE "frag;json;map;pem;png;rules;ttf;txt;vert;wv" data ${EXPECTED_DATA})
+set_glob(DATA GLOB_RECURSE "frag;json;map;otf;png;rules;ttf;txt;vert;wv" data ${EXPECTED_DATA})
 
 ########################################################################
 # COPY DATA AND DLLS
@@ -1315,7 +1358,10 @@ set(COPY_FILES
   ${FREETYPE_COPY_FILES}
   ${OPUSFILE_COPY_FILES}
   ${SDL2_COPY_FILES}
+  ${SQLite3_COPY_FILES}
   ${FFMPEG_COPY_FILES}
+  ${WEBSOCKETS_COPY_FILES}
+  ${DISCORDSDK_COPY_FILES}
 )
 file(COPY ${COPY_FILES} DESTINATION .)
 
@@ -1398,8 +1444,17 @@ generate_source("src/game/generated/server_data.h" "server_content_header")
 
 generate_source7("src/game/generated/protocol7.cpp" "network_source")
 generate_source7("src/game/generated/protocol7.h" "network_header")
+generate_source7("src/game/generated/client_data7.cpp" "client_content_source")
+generate_source7("src/game/generated/client_data7.h" "client_content_header")
 
 generate_maps("src/game/generated/protocolglue.h")
+
+add_custom_command(OUTPUT "src/game/generated/wordlist.h"
+  COMMAND ${PYTHON_EXECUTABLE} scripts/wordlist.py > ${PROJECT_BINARY_DIR}/src/game/generated/wordlist.h
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  DEPENDS
+    scripts/wordlist.py
+)
 
 ########################################################################
 # SHARED
@@ -1409,14 +1464,15 @@ generate_maps("src/game/generated/protocolglue.h")
 set_src(BASE GLOB_RECURSE src/base
   color.h
   detect.h
-  hash.c
+  dynamic.h
+  hash.cpp
   hash.h
-  hash_bundled.c
+  hash_bundled.cpp
   hash_ctxt.h
-  hash_libtomcrypt.c
-  hash_openssl.c
+  hash_libtomcrypt.cpp
+  hash_openssl.cpp
   math.h
-  system.c
+  system.cpp
   system.h
   tl/algorithm.h
   tl/allocator.h
@@ -1426,9 +1482,9 @@ set_src(BASE GLOB_RECURSE src/base
   tl/sorted_array.h
   tl/string.h
   tl/threading.h
-  unicode/confusables.c
+  unicode/confusables.cpp
   unicode/confusables_data.h
-  unicode/tolower.c
+  unicode/tolower.cpp
   unicode/tolower_data.h
   vmath.h
 )
@@ -1438,6 +1494,7 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   config.h
   console.h
   demo.h
+  discord.h
   editor.h
   engine.h
   friends.h
@@ -1452,10 +1509,13 @@ set_src(ENGINE_INTERFACE GLOB src/engine
   server.h
   serverbrowser.h
   sound.h
+  sqlite.h
+  steam.h
   storage.h
   textrender.h
   updater.h
   uuid.h
+  warning.h
 )
 set_src(ENGINE_SHARED GLOB src/engine/shared
   compression.cpp
@@ -1478,11 +1538,11 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   fifo.h
   filecollection.cpp
   filecollection.h
-  ghost.cpp
-  ghost.h
   global_uuid_manager.cpp
   huffman.cpp
   huffman.h
+  image_manipulation.cpp
+  image_manipulation.h
   jobs.cpp
   jobs.h
   json.cpp
@@ -1491,6 +1551,7 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   linereader.cpp
   linereader.h
   map.cpp
+  map.h
   masterserver.cpp
   memheap.cpp
   memheap.h
@@ -1512,7 +1573,8 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   protocol_ex_msgs.h
   ringbuffer.cpp
   ringbuffer.h
-  serverbrowser.cpp
+  serverinfo.cpp
+  serverinfo.h
   snapshot.cpp
   snapshot.h
   storage.cpp
@@ -1527,11 +1589,12 @@ set_src(ENGINE_SHARED GLOB src/engine/shared
   websockets.h
 )
 set_src(GAME_SHARED GLOB src/game
+  bezier.cpp
+  bezier.h
   collision.cpp
   collision.h
+  ddracechat.h
   ddracecommands.h
-  extrainfo.cpp
-  extrainfo.h
   gamecore.cpp
   gamecore.h
   layers.cpp
@@ -1585,6 +1648,7 @@ set(DEPS ${DEP_JSON} ${DEP_MD5} ${ZLIB_DEP})
 # Libraries
 set(LIBS
   ${CRYPTO_LIBRARIES}
+  ${SQLite3_LIBRARIES}
   ${WEBSOCKETS_LIBRARIES}
   ${ZLIB_LIBRARIES}
   ${PLATFORM_LIBS}
@@ -1598,6 +1662,13 @@ add_library(engine-shared EXCLUDE_FROM_ALL OBJECT ${ENGINE_INTERFACE} ${ENGINE_S
 add_library(game-shared EXCLUDE_FROM_ALL OBJECT ${GAME_SHARED} ${GAME_GENERATED_SHARED})
 list(APPEND TARGETS_OWN engine-shared game-shared)
 
+if(DISCORD AND NOT DISCORD_DYNAMIC)
+  add_library(discord-shared SHARED IMPORTED)
+  set_target_properties(discord-shared PROPERTIES
+    IMPORTED_LOCATION "${DISCORDSDK_LIBRARIES}"
+    IMPORTED_IMPLIB "${DISCORDSDK_LIBRARIES}"
+  )
+endif()
 
 ########################################################################
 # CLIENT
@@ -1605,15 +1676,52 @@ list(APPEND TARGETS_OWN engine-shared game-shared)
 
 if(CLIENT)
   # Sources
-  set_src(ENGINE_CLIENT GLOB src/engine/client
+  set_src(STEAMAPI_SRC GLOB_RECURSE src/steam
+    steam_api_flat.h
+    steam_api_stub.cpp
+  )
+
+  if(STEAM OR TARGET_OS STREQUAL "windows" OR TARGET_OS STREQUAL "mac")
+    set(STEAMAPI_KIND SHARED)
+  else()
+    set(STEAMAPI_KIND STATIC)
+  endif()
+  set(TARGET_STEAMAPI steam_api)
+  add_library(${TARGET_STEAMAPI} ${STEAMAPI_KIND} ${STEAMAPI_SRC})
+  list(APPEND TARGETS_OWN ${TARGET_STEAMAPI})
+
+  set_src(ENGINE_CLIENT GLOB_RECURSE src/engine/client
+    backend/glsl_shader_compiler.cpp
+    backend/glsl_shader_compiler.h
+    backend/opengl/backend_opengl.cpp
+    backend/opengl/backend_opengl.h
+    backend/opengl/backend_opengl3.cpp
+    backend/opengl/backend_opengl3.h
+    backend/opengl/opengl_sl.cpp
+    backend/opengl/opengl_sl.h
+    backend/opengl/opengl_sl_program.cpp
+    backend/opengl/opengl_sl_program.h
+    backend/opengles/backend_opengles.cpp
+    backend/opengles/backend_opengles.h
+    backend/opengles/backend_opengles3.cpp
+    backend/opengles/backend_opengles3.h
+    backend/opengles/gles_class_defines.h
+    backend/opengles/opengles_sl.cpp
+    backend/opengles/opengles_sl_program.cpp
     backend_sdl.cpp
     backend_sdl.h
+    blocklist_driver.cpp
+    blocklist_driver.h
     client.cpp
     client.h
     demoedit.cpp
     demoedit.h
+    discord.cpp
     friends.cpp
     friends.h
+    ghost.cpp
+    ghost.h
+    graphics_defines.h
     graphics_threaded.cpp
     graphics_threaded.h
     http.cpp
@@ -1623,14 +1731,16 @@ if(CLIENT)
     keynames.h
     notifications.cpp
     notifications.h
-    opengl_sl.cpp
-    opengl_sl.h
-    opengl_sl_program.cpp
-    opengl_sl_program.h
     serverbrowser.cpp
     serverbrowser.h
+    serverbrowser_http.cpp
+    serverbrowser_http.h
+    serverbrowser_ping_cache.cpp
+    serverbrowser_ping_cache.h
     sound.cpp
     sound.h
+    sqlite.cpp
+    steam.cpp
     text.cpp
     updater.cpp
     updater.h
@@ -1681,12 +1791,16 @@ if(CLIENT)
     components/maplayers.h
     components/mapsounds.cpp
     components/mapsounds.h
+    components/menu_background.cpp
+    components/menu_background.h
     components/menus.cpp
     components/menus.h
     components/menus_browser.cpp
     components/menus_demo.cpp
     components/menus_ingame.cpp
     components/menus_settings.cpp
+    components/menus_settings_assets.cpp
+    components/menus_start.cpp
     components/motd.cpp
     components/motd.h
     components/nameplates.cpp
@@ -1725,13 +1839,18 @@ if(CLIENT)
     prediction/entity.h
     prediction/gameworld.cpp
     prediction/gameworld.h
+    projectile_data.cpp
+    projectile_data.h
     race.cpp
     race.h
     render.cpp
     render.h
     render_map.cpp
+    skin.h
     ui.cpp
     ui.h
+    ui_ex.cpp
+    ui_ex.h
   )
   set_src(GAME_EDITOR GLOB src/game/editor
     auto_map.cpp
@@ -1749,6 +1868,8 @@ if(CLIENT)
   set(GAME_GENERATED_CLIENT
     src/game/generated/client_data.cpp
     src/game/generated/client_data.h
+    src/game/generated/client_data7.cpp
+    src/game/generated/client_data7.h
   )
   set(CLIENT_SRC ${ENGINE_CLIENT} ${PLATFORM_CLIENT} ${GAME_CLIENT} ${GAME_EDITOR} ${GAME_GENERATED_CLIENT})
 
@@ -1770,6 +1891,8 @@ if(CLIENT)
     ${OPUS_LIBRARIES}
     ${OGG_LIBRARIES}
 
+    ${TARGET_STEAMAPI}
+
     ${PLATFORM_CLIENT_LIBS}
 
     # Add pthreads (on non-Windows) at the end, so that other libraries can depend
@@ -1777,12 +1900,21 @@ if(CLIENT)
     ${CMAKE_THREAD_LIBS_INIT}
   )
 
+  if(DISCORD)
+    if(NOT DISCORD_DYNAMIC)
+      list(APPEND LIBS_CLIENT discord-shared)
+    else()
+      list(APPEND LIBS_CLIENT ${CMAKE_DL_LIBS})
+    endif()
+  endif()
+
   if(TARGET_OS STREQUAL "windows")
     set(CLIENT_ICON "other/icons/DDNet.rc")
     if(NOT MINGW)
       set(CLIENT_MANIFEST "other/manifest/DDNet.manifest")
     else()
       set(CLIENT_MANIFEST "other/manifest/DDNet.rc")
+      set_target_properties(${TARGET_STEAMAPI} PROPERTIES PREFIX "")
     endif()
   else()
     set(CLIENT_ICON)
@@ -1791,7 +1923,7 @@ if(CLIENT)
 
   # Target
   set(TARGET_CLIENT ${CLIENT_EXECUTABLE})
-  add_executable(${TARGET_CLIENT}
+  add_executable(${TARGET_CLIENT} WIN32
     ${CLIENT_SRC}
     ${CLIENT_ICON}
     ${CLIENT_MANIFEST}
@@ -1800,6 +1932,10 @@ if(CLIENT)
     $<TARGET_OBJECTS:game-shared>
   )
   target_link_libraries(${TARGET_CLIENT} ${LIBS_CLIENT})
+
+  if(MSVC)
+    target_link_options(${TARGET_CLIENT} PRIVATE /ENTRY:mainCRTStartup)
+  endif()
 
   target_include_directories(${TARGET_CLIENT} PRIVATE
     ${CURL_INCLUDE_DIRS}
@@ -1812,9 +1948,14 @@ if(CLIENT)
     ${SDL2_INCLUDE_DIRS}
     ${WAVPACK_INCLUDE_DIRS}
     ${FFMPEG_INCLUDE_DIRS}
+    ${DISCORDSDK_INCLUDE_DIRS}
 
     ${PLATFORM_CLIENT_INCLUDE_DIRS}
   )
+
+  if(STEAMAPI_KIND STREQUAL SHARED OR DISCORD_DYNAMIC)
+    set_own_rpath(${TARGET_CLIENT})
+  endif()
 
   set(PARAMS "${WAVPACK_INCLUDE_DIRS};${WAVPACK_INCLUDE_DIRS}")
   if(NOT(WAVPACK_OPEN_FILE_INPUT_EX_PARAMS STREQUAL PARAMS))
@@ -1853,29 +1994,31 @@ set_src(ANTIBOT_SRC GLOB src/antibot
   antibot_null.cpp
 )
 
-set_src(ENGINE_SERVER GLOB src/engine/server
+set_src(ENGINE_SERVER GLOB_RECURSE src/engine/server
   antibot.cpp
   antibot.h
   authmanager.cpp
   authmanager.h
+  databases/connection.cpp
+  databases/connection.h
+  databases/connection_pool.cpp
+  databases/connection_pool.h
+  databases/mysql.cpp
+  databases/sqlite.cpp
   name_ban.cpp
   name_ban.h
   register.cpp
   register.h
   server.cpp
   server.h
-  sql_connector.cpp
-  sql_connector.h
-  sql_server.cpp
-  sql_server.h
   sql_string_helpers.cpp
   sql_string_helpers.h
   upnp.cpp
   upnp.h
 )
 set_src(GAME_SERVER GLOB_RECURSE src/game/server
+  alloc.h
   ddracechat.cpp
-  ddracechat.h
   ddracecommands.cpp
   entities/character.cpp
   entities/character.h
@@ -1907,18 +2050,14 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
   gamecontroller.h
   gamemodes/DDRace.cpp
   gamemodes/DDRace.h
-  gamemodes/gamemode.h
   gameworld.cpp
   gameworld.h
   player.cpp
   player.h
   save.cpp
   save.h
+  score.cpp
   score.h
-  score/file_score.cpp
-  score/file_score.h
-  score/sql_score.cpp
-  score/sql_score.h
   teams.cpp
   teams.h
   teehistorian.cpp
@@ -1929,6 +2068,7 @@ set_src(GAME_SERVER GLOB_RECURSE src/game/server
 set(GAME_GENERATED_SERVER
   "src/game/generated/server_data.cpp"
   "src/game/generated/server_data.h"
+  "src/game/generated/wordlist.h"
 )
 set(SERVER_SRC ${ENGINE_SERVER} ${GAME_SERVER} ${GAME_GENERATED_SERVER})
 if(TARGET_OS STREQUAL "windows")
@@ -1939,7 +2079,7 @@ endif()
 
 # Antibot
 if(ANTIBOT)
-  set(TARGET_ANTIBOT ddnet-antibot)
+  set(TARGET_ANTIBOT antibot)
   add_library(${TARGET_ANTIBOT} SHARED ${ANTIBOT_SRC})
   list(APPEND TARGETS_OWN ${TARGET_ANTIBOT})
 endif()
@@ -1968,18 +2108,8 @@ target_link_libraries(${TARGET_SERVER} ${LIBS_SERVER})
 list(APPEND TARGETS_OWN ${TARGET_SERVER})
 list(APPEND TARGETS_LINK ${TARGET_SERVER})
 
-if(ANTIBOT)
-  if(CMAKE_VERSION VERSION_GREATER 3.8 OR CMAKE_VERSION VERSION_EQUAL 3.8)
-    if(CMAKE_VERSION VERSION_LESS 3.14)
-      set_property(TARGET ${TARGET_SERVER} PROPERTY BUILD_RPATH "$ORIGIN")
-    endif()
-  else()
-    message(STATUS "Can't set BUILD_RPATH in CMake before 3.8, pass -Wl,-rpath,'$ORIGIN' manually if you wish to emulate this. Or just install a newer version of CMake...")
-  endif()
-endif()
-
 if(TARGET_OS AND TARGET_OS STREQUAL "mac")
-  set(SERVER_LAUNCHER_SRC src/osxlaunch/server.mm)
+  set(SERVER_LAUNCHER_SRC src/macoslaunch/server.mm)
   set(TARGET_SERVER_LAUNCHER ${TARGET_SERVER}-Launcher)
   add_executable(${TARGET_SERVER_LAUNCHER} ${SERVER_LAUNCHER_SRC})
   target_link_libraries(${TARGET_SERVER_LAUNCHER} ${COCOA})
@@ -2018,13 +2148,10 @@ set_src(TOOLS GLOB src/tools
   map_convert_07.cpp
   map_diff.cpp
   map_extract.cpp
+  map_optimize.cpp
   map_replace_image.cpp
   map_resave.cpp
   packetgen.cpp
-  tileset_borderadd.cpp
-  tileset_borderfix.cpp
-  tileset_borderrem.cpp
-  tileset_borderset.cpp
   unicode_confusables.cpp
   uuid.cpp
 )
@@ -2034,7 +2161,7 @@ foreach(ABS_T ${TOOLS})
     string(REGEX REPLACE "\\.cpp$" "" TOOL "${T}")
     set(TOOL_DEPS ${DEPS})
     set(TOOL_LIBS ${LIBS})
-    if(TOOL MATCHES "^(tileset_.*|dilate|map_convert_07|map_extract|map_replace_image)$")
+    if(TOOL MATCHES "^(dilate|map_convert_07|map_optimize|map_extract|map_replace_image)$")
       list(APPEND TOOL_DEPS ${PNGLITE_DEP})
       list(APPEND TOOL_LIBS ${PNGLITE_LIBRARIES})
       list(APPEND TOOL_INCLUDE_DIRS ${PNGLITE_INCLUDE_DIRS})
@@ -2071,6 +2198,8 @@ add_custom_target(everything DEPENDS ${TARGETS_OWN})
 if(GTEST_FOUND OR DOWNLOAD_GTEST)
   set_src(TESTS GLOB src/test
     aio.cpp
+    bezier.cpp
+    blocklist_driver.cpp
     color.cpp
     csv.cpp
     datafile.cpp
@@ -2081,7 +2210,13 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     json.cpp
     mapbugs.cpp
     name_ban.cpp
+    netaddr.cpp
+    packer.cpp
     prng.cpp
+    secure_random.cpp
+    serverbrowser.cpp
+    serverinfo.cpp
+    sorted_array.cpp
     str.cpp
     strip_path_and_extension.cpp
     teehistorian.cpp
@@ -2089,8 +2224,20 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     test.h
     thread.cpp
     unix.cpp
+    uuid.cpp
   )
   set(TESTS_EXTRA
+    src/engine/client/blocklist_driver.cpp
+    src/engine/client/blocklist_driver.h
+    src/engine/client/http.cpp
+    src/engine/client/http.h
+    src/engine/client/serverbrowser.cpp
+    src/engine/client/serverbrowser.h
+    src/engine/client/serverbrowser_http.cpp
+    src/engine/client/serverbrowser_http.h
+    src/engine/client/serverbrowser_ping_cache.cpp
+    src/engine/client/serverbrowser_ping_cache.h
+    src/engine/client/sqlite.cpp
     src/engine/server/name_ban.cpp
     src/engine/server/name_ban.h
     src/game/server/teehistorian.cpp
@@ -2105,8 +2252,8 @@ if(GTEST_FOUND OR DOWNLOAD_GTEST)
     $<TARGET_OBJECTS:game-shared>
     ${DEPS}
   )
-  target_link_libraries(${TARGET_TESTRUNNER} ${LIBS} ${GTEST_LIBRARIES})
-  target_include_directories(${TARGET_TESTRUNNER} PRIVATE ${GTEST_INCLUDE_DIRS})
+  target_link_libraries(${TARGET_TESTRUNNER} ${LIBS} ${CURL_LIBRARIES} ${GTEST_LIBRARIES})
+  target_include_directories(${TARGET_TESTRUNNER} PRIVATE ${CURL_INCLUDE_DIRS} ${GTEST_INCLUDE_DIRS})
 
   list(APPEND TARGETS_OWN ${TARGET_TESTRUNNER})
   list(APPEND TARGETS_LINK ${TARGET_TESTRUNNER})
@@ -2193,11 +2340,7 @@ set(CPACK_SOURCE_GENERATOR ZIP TGZ TBZ2 TXZ)
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
-if(VERSION_PATCH STREQUAL "0")
-  set(CPACK_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR})
-else()
-  set(CPACK_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
-endif()
+set(CPACK_PACKAGE_VERSION ${VERSION})
 set(CPACK_SYSTEM_NAME ${CMAKE_SYSTEM_NAME})
 
 if(TARGET_OS AND TARGET_BITS)
@@ -2239,7 +2382,6 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME ${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION
 set(CPACK_SOURCE_FILES
   CMakeLists.txt
   README.md
-  autoexec_server.cfg
   cmake/
   data/
   datasrc/
@@ -2272,14 +2414,17 @@ set(CPACK_TARGETS
   config_retrieve
   config_store
   dilate
+  map_convert_07
   map_diff
   map_extract
 )
+if(STEAMAPI_KIND STREQUAL SHARED)
+  list(APPEND CPACK_TARGETS ${TARGET_STEAMAPI})
+endif()
 set(CPACK_DIRS data)
 set(CPACK_FILES
   license.txt
   storage.cfg
-  autoexec_server.cfg
   ${COPY_FILES}
 )
 if(TARGET_OS STREQUAL "windows")
@@ -2290,9 +2435,12 @@ if(NOT DEV)
   include(GNUInstallDirs)
   install(DIRECTORY data DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/ddnet COMPONENT data)
   install(TARGETS ${TARGET_CLIENT} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT client)
+  if(STEAMAPI_KIND STREQUAL SHARED)
+    install(TARGETS ${TARGET_STEAMAPI} DESTINATION ${CMAKE_INSTALL_LIBDIR}/ddnet COMPONENT client)
+  endif()
   install(TARGETS ${TARGET_SERVER} DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT server)
   if(ANTIBOT)
-    install(TARGETS ${TARGET_ANTIBOT} DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT server)
+    install(TARGETS ${TARGET_ANTIBOT} DESTINATION ${CMAKE_INSTALL_LIBDIR}/ddnet COMPONENT server)
   endif()
   install(TARGETS ${TARGETS_TOOLS} DESTINATION ${CMAKE_INSTALL_LIBDIR}/ddnet COMPONENT tools)
   install(FILES other/ddnet.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications COMPONENT client)
@@ -2353,22 +2501,56 @@ if(CLIENT AND (DMGTOOLS_FOUND OR HDIUTIL))
     COMMAND ${CMAKE_COMMAND} -E copy bundle/client/Info.plist ${PROJECT_SOURCE_DIR}/other/bundle/client/PkgInfo ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_CLIENT}> ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/ddnet-libs/sdl/mac/lib64/SDL2.framework ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/SDL2.framework
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/discord/mac/lib64/discord_game_sdk.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/freetype/mac/lib64/libfreetype.6.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/mac/lib64/libavcodec.58.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/mac/lib64/libavformat.58.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/mac/lib64/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/mac/lib64/libswresample.3.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/ffmpeg/mac/lib64/libswscale.5.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/websockets/mac/lib64/libwebsockets.17.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_BINARY_DIR}/libsteam_api.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/
     COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_strip_rpath.py ${CMAKE_OTOOL} ${CMAKE_INSTALL_NAME_TOOL} ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
     COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
-    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libfreetype.6.dylib @executable_path/../Frameworks/libfreetype.6.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libavcodec.58.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libavformat.58.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libswscale.5.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libswresample.3.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavcodec.58.dylib @rpath/libavcodec.58.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavcodec.58.dylib @rpath/libavcodec.58.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libavformat.58.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavformat.58.dylib @rpath/libavformat.58.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavutil.56.dylib @rpath/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavutil.56.dylib @rpath/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libavcodec.58.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavutil.56.dylib @rpath/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libavformat.58.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavutil.56.dylib @rpath/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libswscale.5.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libavutil.56.dylib @rpath/libavutil.56.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libswresample.3.dylib
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libswscale.5.dylib @rpath/libswscale.5.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libswresample.3.dylib @rpath/libswresample.3.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libfreetype.6.dylib @rpath/libfreetype.6.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    # TODO: Cleaner solution than hardcoding paths
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /home/deen/isos/ddnet/debian6/mac64/libwebsockets-4.1.1/lib/libwebsockets.17.dylib @rpath/libwebsockets.17.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change ${PROJECT_BINARY_DIR}/libsteam_api.dylib @rpath/libsteam_api.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/MacOS/${TARGET_CLIENT}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change ${PROJECT_BINARY_DIR}/libsteam_api.dylib @rpath/libsteam_api.dylib ${DMG_TMPDIR}/${TARGET_CLIENT}.app/Contents/Frameworks/libsteam_api.dylib
 
     # SERVER
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/data/maps ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/Resources/data/maps
     COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/other/icons/${TARGET_SERVER}.icns ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/Resources/
     COMMAND ${CMAKE_COMMAND} -E copy bundle/server/Info.plist ${PROJECT_SOURCE_DIR}/other/bundle/server/PkgInfo ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${TARGET_SERVER}> $<TARGET_FILE:${TARGET_SERVER_LAUNCHER}> ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/MacOS/
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/sqlite3/mac/lib64/libsqlite3.0.dylib ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/Frameworks/
+    COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/ddnet-libs/websockets/mac/lib64/libwebsockets.17.dylib ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/Frameworks/
+    COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/darwin_strip_rpath.py ${CMAKE_OTOOL} ${CMAKE_INSTALL_NAME_TOOL} ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/MacOS/${TARGET_SERVER}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -add_rpath @loader_path/../Frameworks ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/MacOS/${TARGET_SERVER}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /usr/local/lib/libsqlite3.0.dylib @rpath/libsqlite3.0.dylib ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/MacOS/${TARGET_SERVER}
+    COMMAND ${CMAKE_INSTALL_NAME_TOOL} -change /home/deen/isos/ddnet/debian6/mac64/libwebsockets-4.1.1/lib/libwebsockets.17.dylib @rpath/libwebsockets.17.dylib ${DMG_TMPDIR}/${TARGET_SERVER}.app/Contents/MacOS/${TARGET_SERVER}
 
     # DMG
     COMMAND ${PYTHON_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/dmg.py create ${DMG_PARAMS} ${CPACK_PACKAGE_FILE_NAME}.dmg ${CPACK_PACKAGE_FILE_NAME} ${DMG_TMPDIR}
 
     DEPENDS
       ${TARGET_CLIENT}
+      ${TARGET_STEAMAPI}
       ${TARGET_SERVER_LAUNCHER}
       ${TARGET_SERVER}
       ${PROJECT_BINARY_DIR}/bundle/client/Info.plist
@@ -2464,6 +2646,12 @@ macro(source_group_tree dir)
 endmacro()
 source_group_tree(src)
 
+if(ANTIBOT)
+  # Allow the antibot library to use functions from the server binary.
+  add_c_compiler_flag_if_supported(OUR_FLAGS_LINK -rdynamic)
+  set_own_rpath(${TARGET_SERVER})
+endif()
+
 set(TARGETS ${TARGETS_OWN} ${TARGETS_DEP})
 
 foreach(target ${TARGETS})
@@ -2473,6 +2661,9 @@ foreach(target ${TARGETS})
     target_compile_options(${target} PRIVATE /EHsc) # Only catch C++ exceptions with catch.
     target_compile_options(${target} PRIVATE /GS) # Protect the stack pointer.
     target_compile_options(${target} PRIVATE /wd4996) # Use of non-_s functions.
+  endif()
+  if(OUR_FLAGS_LINK)
+    target_link_libraries(${target} ${OUR_FLAGS_LINK})
   endif()
   if(OUR_FLAGS)
     target_compile_options(${target} PRIVATE ${OUR_FLAGS})
@@ -2506,9 +2697,6 @@ foreach(target ${TARGETS_OWN})
     set_property(TARGET ${target} PROPERTY CXX_STANDARD 11)
     set_property(TARGET ${target} PROPERTY CXX_STANDARD_REQUIRED ON)
   endif()
-  if(CMAKE_VERSION VERSION_GREATER 3.14 OR CMAKE_VERSION VERSION_EQUAL 3.14)
-    set_property(TARGET ${TARGET_SERVER} PROPERTY BUILD_RPATH_USE_ORIGIN TRUE)
-  endif()
 
   if(MSVC)
     target_compile_options(${target} PRIVATE /wd4244) # Possible loss of data (float -> int, int -> float, etc.).
@@ -2521,7 +2709,7 @@ foreach(target ${TARGETS_OWN})
   target_include_directories(${target} PRIVATE ${PROJECT_BINARY_DIR}/src)
   target_include_directories(${target} PRIVATE src)
   target_compile_definitions(${target} PRIVATE $<$<CONFIG:Debug>:CONF_DEBUG>)
-  target_include_directories(${target} PRIVATE ${ZLIB_INCLUDE_DIRS})
+  target_include_directories(${target} PRIVATE ${SQLite3_INCLUDE_DIRS} ${ZLIB_INCLUDE_DIRS})
   target_compile_definitions(${target} PRIVATE GLEW_STATIC)
   if(CRYPTO_FOUND)
     target_compile_definitions(${target} PRIVATE CONF_OPENSSL)
@@ -2545,8 +2733,23 @@ foreach(target ${TARGETS_OWN})
     target_compile_definitions(${target} PRIVATE CONF_SQL)
     target_include_directories(${target} PRIVATE ${MYSQL_INCLUDE_DIRS})
   endif()
-  if(AUTOUPDATE)
+  if(AUTOUPDATE AND NOT STEAM)
     target_compile_definitions(${target} PRIVATE CONF_AUTOUPDATE)
+  endif()
+  if(INFORM_UPDATE AND NOT STEAM)
+    target_compile_definitions(${target} PRIVATE CONF_INFORM_UPDATE)
+  endif()
+  if(STEAM)
+    target_compile_definitions(${target} PRIVATE PLATFORM_SUFFIX="-steam")
+  endif()
+  if(DISCORD)
+    target_compile_definitions(${target} PRIVATE CONF_DISCORD)
+    if(DISCORD_DYNAMIC)
+      target_compile_definitions(${target} PRIVATE CONF_DISCORD_DYNAMIC)
+    endif()
+  endif()
+  if(VERSION)
+    target_compile_definitions(${target} PRIVATE GAME_RELEASE_VERSION="${VERSION}")
   endif()
 endforeach()
 

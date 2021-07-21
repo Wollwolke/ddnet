@@ -7,7 +7,7 @@
 
 class CDamageInd : public CComponent
 {
-	int64 m_Lastupdate;
+	int64_t m_Lastupdate;
 	struct CItem
 	{
 		vec2 m_Pos;
@@ -18,7 +18,7 @@ class CDamageInd : public CComponent
 
 	enum
 	{
-		MAX_ITEMS=64,
+		MAX_ITEMS = 64,
 	};
 
 	CItem m_aItems[MAX_ITEMS];
@@ -28,6 +28,7 @@ class CDamageInd : public CComponent
 	void DestroyI(CItem *i);
 
 	int m_DmgIndQuadContainerIndex;
+
 public:
 	CDamageInd();
 

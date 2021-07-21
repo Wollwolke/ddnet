@@ -9,7 +9,7 @@
 
 #include <time.h>
 
-struct CConfiguration;
+class CConfig;
 class CTuningParams;
 class CUuidManager;
 
@@ -34,14 +34,14 @@ public:
 		SHA256_DIGEST m_MapSha256;
 		int m_MapCrc;
 
-		CConfiguration *m_pConfig;
+		CConfig *m_pConfig;
 		CTuningParams *m_pTuning;
 		CUuidManager *m_pUuids;
 	};
 
 	enum
 	{
-		PROTOCOL_6=1,
+		PROTOCOL_6 = 1,
 		PROTOCOL_7,
 	};
 
@@ -66,6 +66,10 @@ public:
 	void RecordPlayerDrop(int ClientID, const char *pReason);
 	void RecordConsoleCommand(int ClientID, int FlagMask, const char *pCmd, IConsole::IResult *pResult);
 	void RecordTestExtra();
+	void RecordTeamSaveSuccess(int Team, CUuid SaveID, const char *pTeamSave);
+	void RecordTeamSaveFailure(int Team);
+	void RecordTeamLoadSuccess(int Team, CUuid SaveID, const char *pTeamSave);
+	void RecordTeamLoadFailure(int Team);
 	void EndInputs();
 
 	void EndTick();

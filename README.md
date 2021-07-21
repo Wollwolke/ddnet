@@ -4,7 +4,7 @@ Our own flavor of DDRace, a Teeworlds mod. See the [website](https://ddnet.tw) f
 
 Development discussions happen on #ddnet on Quakenet ([Webchat](http://webchat.quakenet.org/?channels=ddnet&uio=d4)) or on [Discord in the developer channel](https://discord.gg/xsEd9xu).
 
-You can get binary releases on the [DDNet website](https://ddnet.tw/downloads/).
+You can get binary releases on the [DDNet website](https://ddnet.tw/downloads/), find it on [Steam](https://store.steampowered.com/app/412220/DDraceNetwork/) or [install from repository](#installation-from-repository).
 
 Cloning
 -------
@@ -25,6 +25,21 @@ To clone the libraries if you have previously cloned DDNet without them:
 
     git submodule update --init --recursive
 
+Dependencies on Linux
+---------------------
+
+You can install the required libraries on your system, `touch CMakeLists.txt` and CMake will use the system-wide libraries by default. You can install all required dependencies and CMake on Debian or Ubuntu like this:
+
+    sudo apt install build-essential cmake git libcurl4-openssl-dev libssl-dev libfreetype6-dev libglew-dev libnotify-dev libogg-dev libopus-dev libopusfile-dev libpnglite-dev libsdl2-dev libsqlite3-dev libwavpack-dev python google-mock
+
+Or on Arch Linux like this:
+
+    sudo pacman -S --needed base-devel cmake curl freetype2 git glew libnotify opusfile python sdl2 sqlite wavpack gmock
+
+There is an [AUR package for pnglite](https://aur.archlinux.org/packages/pnglite/). For instructions on installing it, see [AUR packages installation instructions on ArchWiki](https://wiki.archlinux.org/index.php/Arch_User_Repository#Installing_packages).
+
+If you don't want to use the system libraries, you can pass the `-DPREFER_BUNDLED_LIBS=ON` parameter to cmake.
+
 Building on Linux and macOS
 ---------------------------
 
@@ -36,16 +51,6 @@ To compile DDNet yourself, execute the following commands in the source root:
     make -j$(nproc)
 
 Pass the number of threads for compilation to `make -j`. `$(nproc)` in this case returns the number of processing units. DDNet requires additional libraries, that are bundled for the most common platforms (Windows, Mac, Linux, all x86 and x86\_64). The bundled libraries are now in the ddnet-libs submodule.
-
-You can install the required libraries on your system, `touch CMakeLists.txt` and CMake will use the system-wide libraries by default. You can install all required dependencies and CMake on Debian or Ubuntu like this:
-
-    sudo apt install build-essential cmake git libcurl4-openssl-dev libssl-dev libfreetype6-dev libglew-dev libnotify-dev libogg-dev libopus-dev libopusfile-dev libpnglite-dev libsdl2-dev libwavpack-dev python
-
-Or on Arch Linux like this:
-
-    sudo pacman -S --needed base-devel cmake curl freetype2 git glew libnotify opusfile python sdl2 wavpack
-
-There is an [AUR package for pnglite](https://aur.archlinux.org/packages/pnglite/). For instructions on installing it, see [AUR packages installation instructions on ArchWiki](https://wiki.archlinux.org/index.php/Arch_User_Repository#Installing_packages).
 
 The following is a non-exhaustive list of build arguments that can be passed to the `cmake` command-line tool in order to enable or disable options in build time:
 
@@ -59,7 +64,7 @@ Whether to prefer bundled libraries over system libraries. Setting to ON will ma
 Whether to enable WebSocket support for server. Setting to ON requires the `libwebsockets-dev` library installed. Default value is OFF.
 
 * **-DMYSQL=[ON|OFF]** <br>
-Whether to enable MySQL/MariaDB support for server. Setting to ON requires the `libmariadbclient-dev`, `libmysqlcppconn-dev` and `libboost-dev` libraries installed, which are also provided as bundled libraries for the common platforms. Default value is OFF.
+Whether to enable MySQL/MariaDB support for server. Requires at least MySQL 8.0 or MariaDB 10.2. Setting to ON requires the `libmariadbclient-dev`, `libmysqlcppconn-dev` and `libboost-dev` libraries installed, which are also provided as bundled libraries for the common platforms. Default value is OFF.
 
    Note that the bundled MySQL libraries might not work properly on your system. If you run into connection problems with the MySQL server, for example that it connects as root while you chose another user, make sure to install your system libraries for the MySQL client and C++ connector. Make sure that the CMake configuration summary says that it found MySQL libs that were not bundled (no "using bundled libs").
 
@@ -71,6 +76,8 @@ Whether to enable client compilation. If set to OFF, DDNet will not depend on Cu
 
 * **-DVIDEORECORDER=[ON|OFF]** <br>
 Whether to add video recording support using FFmpeg to the client. You can use command `start_video` and `stop_video` to start and stop conversion from demo to mp4. This feature is currently experimental and not enabled by default.
+
+Dependencies needed on debian: `libx264-dev libavfilter-dev libavdevice-dev libavformat-dev libavcodec-extra libavutil-dev`
 
 * **-DDOWNLOAD_GTEST=[ON|OFF]** <br>
 Whether to download and compile GTest. Useful if GTest is not installed and, for Linux users, there is no suitable package providing it. Default value is OFF.
@@ -103,6 +110,25 @@ sudo cp *.a /usr/lib
 
 To run the tests you must target `run_tests` with make:
 `make run_tests`
+
+Using AddressSanitizer + UndefinedBehaviourSanitizer or Valgrind's Memcheck
+---------------------------------------------------------------------------
+ASan+UBSan and Memcheck are useful to find code problems more easily. Please use them to test your changes if you can.
+
+For ASan+UBSan compile with:
+```bash
+CC=clang CXX=clang++ CXXFLAGS="-fsanitize=address,undefined -fsanitize-recover=address,undefined -fno-omit-frame-pointer" CFLAGS="-fsanitize=address,undefined -fsanitize-recover=address,undefined -fno-omit-frame-pointer" cmake -DCMAKE_BUILD_TYPE=Debug .
+make
+```
+and run with:
+```bash
+UBSAN_OPTIONS=log_path=./SAN:print_stacktrace=1:halt_on_errors=0 ASAN_OPTIONS=log_path=./SAN:print_stacktrace=1:check_initialization_order=1:detect_leaks=1:halt_on_errors=0 ./DDNet
+```
+
+Check the SAN.\* files afterwards. This finds more problems than memcheck, runs faster, but requires a modern GCC/Clang compiler.
+
+For valgrind's memcheck compile a normal Debug build and run with: `valgrind --tool=memcheck ./DDNet`
+Expect a large slow down.
 
 Building on Windows with Visual Studio
 --------------------------------------
@@ -161,7 +187,49 @@ $ make -j8
 $ ./DDNet-Server -f mine.cfg
 ```
 
-Repository status
-=================
+<a href="https://repology.org/metapackage/ddnet/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/ddnet.svg?header=" alt="Packaging status" align="right">
+</a>
 
-[![Repository status](https://repology.org/badge/vertical-allrepos/ddnet.svg?header=)](https://repology.org/metapackage/ddnet/versions)
+Installation from Repository
+----------------------------
+
+Debian/Ubuntu
+
+```bash
+$ apt-get install ddnet
+
+```
+
+MacOS
+
+```bash
+$ brew install --cask ddnet
+```
+
+Fedora
+
+```bash
+$ dnf install ddnet
+```
+
+Arch Linux
+
+```bash
+$ yay -S ddnet
+```
+
+FreeBSD
+
+```bash
+$ pkg install DDNet
+```
+
+Benchmarking
+------------
+
+DDNet is available in the [Phoronix Test Suite](https://openbenchmarking.org/test/pts/ddnet). If you have PTS installed you can easily benchmark DDNet on your own system like this:
+
+```bash
+$ phoronix-test-suite benchmark ddnet
+```

@@ -10,10 +10,10 @@
 
 #include "kernel.h"
 #include "message.h"
+#include <engine/shared/protocol.h>
 #include <game/generated/protocol.h>
 #include <game/generated/protocol7.h>
 #include <game/generated/protocolglue.h>
-#include <engine/shared/protocol.h>
 
 struct CAntibotRoundData;
 
@@ -41,17 +41,18 @@ public:
 	int Tick() const { return m_CurrentGameTick; }
 	int TickSpeed() const { return m_TickSpeed; }
 
+	virtual int Port() const = 0;
 	virtual int MaxClients() const = 0;
-	virtual int ClientCount() = 0;
-	virtual int DistinctClientCount() = 0;
-	virtual const char *ClientName(int ClientID) = 0;
-	virtual const char *ClientClan(int ClientID) = 0;
-	virtual int ClientCountry(int ClientID) = 0;
-	virtual bool ClientIngame(int ClientID) = 0;
-	virtual bool ClientAuthed(int ClientID) = 0;
-	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) = 0;
+	virtual int ClientCount() const = 0;
+	virtual int DistinctClientCount() const = 0;
+	virtual const char *ClientName(int ClientID) const = 0;
+	virtual const char *ClientClan(int ClientID) const = 0;
+	virtual int ClientCountry(int ClientID) const = 0;
+	virtual bool ClientIngame(int ClientID) const = 0;
+	virtual bool ClientAuthed(int ClientID) const = 0;
+	virtual int GetClientInfo(int ClientID, CClientInfo *pInfo) const = 0;
 	virtual void SetClientDDNetVersion(int ClientID, int DDNetVersion) = 0;
-	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) = 0;
+	virtual void GetClientAddr(int ClientID, char *pAddrStr, int Size) const = 0;
 	virtual void RestrictRconOutput(int ClientID) = 0;
 
 	virtual int SendMsg(CMsgPacker *pMsg, int Flags, int ClientID) = 0;
@@ -61,7 +62,7 @@ public:
 	{
 		int Result = 0;
 		T tmp;
-		if (ClientID == -1)
+		if(ClientID == -1)
 		{
 			for(int i = 0; i < MAX_CLIENTS; i++)
 				if(ClientIngame(i))
@@ -69,7 +70,9 @@ public:
 					mem_copy(&tmp, pMsg, sizeof(T));
 					Result = SendPackMsgTranslate(&tmp, Flags, i);
 				}
-		} else {
+		}
+		else
+		{
 			mem_copy(&tmp, pMsg, sizeof(T));
 			Result = SendPackMsgTranslate(&tmp, Flags, ClientID);
 		}
@@ -129,8 +132,10 @@ public:
 
 	int SendPackMsgTranslate(CNetMsg_Sv_KillMsg *pMsg, int Flags, int ClientID)
 	{
-		if (!Translate(pMsg->m_Victim, ClientID)) return 0;
-		if (!Translate(pMsg->m_Killer, ClientID)) pMsg->m_Killer = pMsg->m_Victim;
+		if(!Translate(pMsg->m_Victim, ClientID))
+			return 0;
+		if(!Translate(pMsg->m_Killer, ClientID))
+			pMsg->m_Killer = pMsg->m_Victim;
 		return SendPackMsgOne(pMsg, Flags, ClientID);
 	}
 
@@ -145,19 +150,19 @@ public:
 		return SendMsg(&Packer, Flags, ClientID);
 	}
 
-	bool Translate(int& Target, int Client)
+	bool Translate(int &Target, int Client)
 	{
 		if(IsSixup(Client))
 			return true;
 		CClientInfo Info;
 		GetClientInfo(Client, &Info);
-		if (Info.m_DDNetVersion >= VERSION_DDNET_OLD)
+		if(Info.m_DDNetVersion >= VERSION_DDNET_OLD)
 			return true;
 		int *pMap = GetIdMap(Client);
 		bool Found = false;
-		for (int i = 0; i < VANILLA_MAX_CLIENTS; i++)
+		for(int i = 0; i < VANILLA_MAX_CLIENTS; i++)
 		{
-			if (Target == pMap[i])
+			if(Target == pMap[i])
 			{
 				Target = i;
 				Found = true;
@@ -167,17 +172,17 @@ public:
 		return Found;
 	}
 
-	bool ReverseTranslate(int& Target, int Client)
+	bool ReverseTranslate(int &Target, int Client)
 	{
 		if(IsSixup(Client))
 			return true;
 		CClientInfo Info;
 		GetClientInfo(Client, &Info);
-		if (Info.m_DDNetVersion >= VERSION_DDNET_OLD)
+		if(Info.m_DDNetVersion >= VERSION_DDNET_OLD)
 			return true;
-		Target = clamp(Target, 0, VANILLA_MAX_CLIENTS-1);
+		Target = clamp(Target, 0, VANILLA_MAX_CLIENTS - 1);
 		int *pMap = GetIdMap(Client);
-		if (pMap[Target] == -1)
+		if(pMap[Target] == -1)
 			return false;
 		Target = pMap[Target];
 		return true;
@@ -185,6 +190,7 @@ public:
 
 	virtual void GetMapInfo(char *pMapName, int MapNameSize, int *pMapSize, SHA256_DIGEST *pSha256, int *pMapCrc) = 0;
 
+	virtual bool WouldClientNameChange(int ClientID, const char *pNameRequest) = 0;
 	virtual void SetClientName(int ClientID, char const *pName) = 0;
 	virtual void SetClientClan(int ClientID, char const *pClan) = 0;
 	virtual void SetClientCountry(int ClientID, int Country) = 0;
@@ -197,16 +203,16 @@ public:
 
 	virtual void SnapSetStaticsize(int ItemType, int Size) = 0;
 
-	enum {
-		RCON_CID_SERV=-1,
-		RCON_CID_VOTE=-2,
+	enum
+	{
+		RCON_CID_SERV = -1,
+		RCON_CID_VOTE = -2,
 	};
 	virtual void SetRconCID(int ClientID) = 0;
-	virtual int GetAuthedState(int ClientID) = 0;
-	virtual const char *GetAuthName(int ClientID) = 0;
+	virtual int GetAuthedState(int ClientID) const = 0;
+	virtual const char *GetAuthName(int ClientID) const = 0;
 	virtual void Kick(int ClientID, const char *pReason) = 0;
 	virtual void Ban(int ClientID, int Seconds, const char *pReason) = 0;
-
 
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
@@ -218,11 +224,13 @@ public:
 	virtual void StopRecord(int ClientID) = 0;
 	virtual bool IsRecording(int ClientID) = 0;
 
-	virtual void GetClientAddr(int ClientID, NETADDR *pAddr) = 0;
+	virtual void GetClientAddr(int ClientID, NETADDR *pAddr) const = 0;
 
-	virtual int* GetIdMap(int ClientID) = 0;
+	virtual int *GetIdMap(int ClientID) = 0;
 
 	virtual bool DnsblWhite(int ClientID) = 0;
+	virtual bool DnsblPending(int ClientID) = 0;
+	virtual bool DnsblBlack(int ClientID) = 0;
 	virtual const char *GetAnnouncementLine(char const *FileName) = 0;
 	virtual bool ClientPrevIngame(int ClientID) = 0;
 	virtual const char *GetNetErrorString(int ClientID) = 0;
@@ -235,7 +243,7 @@ public:
 
 	virtual void SendMsgRaw(int ClientID, const void *pData, int Size, int Flags) = 0;
 
-	virtual char *GetMapName() = 0;
+	virtual char *GetMapName() const = 0;
 
 	virtual bool IsSixup(int ClientID) const = 0;
 };
@@ -250,7 +258,7 @@ public:
 	virtual void OnMapChange(char *pNewMapName, int MapNameSize) = 0;
 
 	// FullShutdown is true if the program is about to exit (not if the map is changed)
-	virtual void OnShutdown(bool FullShutdown = false) = 0;
+	virtual void OnShutdown() = 0;
 
 	virtual void OnTick() = 0;
 	virtual void OnPreSnap() = 0;
@@ -259,25 +267,42 @@ public:
 
 	virtual void OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID) = 0;
 
-	virtual void OnClientConnected(int ClientID) = 0;
+	// Called before map reload, for any data that the game wants to
+	// persist to the next map.
+	//
+	// Has the size of the return value of `PersistentClientDataSize()`.
+	//
+	// Returns whether the game should be supplied with the data when the
+	// client connects for the next map.
+	virtual bool OnClientDataPersist(int ClientID, void *pData) = 0;
+
+	// Called when a client connects.
+	//
+	// If it is reconnecting to the game after a map change, the
+	// `pPersistentData` point is nonnull and contains the data the game
+	// previously stored.
+	virtual void OnClientConnected(int ClientID, void *pPersistentData) = 0;
+
 	virtual void OnClientEnter(int ClientID) = 0;
 	virtual void OnClientDrop(int ClientID, const char *pReason) = 0;
 	virtual void OnClientDirectInput(int ClientID, void *pInput) = 0;
 	virtual void OnClientPredictedInput(int ClientID, void *pInput) = 0;
 	virtual void OnClientPredictedEarlyInput(int ClientID, void *pInput) = 0;
 
-	virtual bool IsClientReady(int ClientID) = 0;
-	virtual bool IsClientPlayer(int ClientID) = 0;
+	virtual bool IsClientReady(int ClientID) const = 0;
+	virtual bool IsClientPlayer(int ClientID) const = 0;
 
-	virtual CUuid GameUuid() = 0;
-	virtual const char *GameType() = 0;
-	virtual const char *Version() = 0;
-	virtual const char *NetVersion() = 0;
+	virtual int PersistentClientDataSize() const = 0;
+
+	virtual CUuid GameUuid() const = 0;
+	virtual const char *GameType() const = 0;
+	virtual const char *Version() const = 0;
+	virtual const char *NetVersion() const = 0;
 
 	// DDRace
 
 	virtual void OnSetAuthed(int ClientID, int Level) = 0;
-	virtual bool PlayerExists(int ClientID) = 0;
+	virtual bool PlayerExists(int ClientID) const = 0;
 
 	virtual void OnClientEngineJoin(int ClientID, bool Sixup) = 0;
 	virtual void OnClientEngineDrop(int ClientID, const char *pReason) = 0;

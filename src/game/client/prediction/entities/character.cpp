@@ -1,12 +1,12 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <new>
 #include <engine/shared/config.h>
 #include <game/mapitems.h>
+#include <new>
 
 #include "character.h"
-#include "projectile.h"
 #include "laser.h"
+#include "projectile.h"
 
 // Character, "physical" player's part
 
@@ -17,10 +17,10 @@ void CCharacter::SetWeapon(int W)
 
 	m_LastWeapon = m_Core.m_ActiveWeapon;
 	m_QueuedWeapon = -1;
-	m_Core.m_ActiveWeapon = W;
+	SetActiveWeapon(W);
 
 	if(m_Core.m_ActiveWeapon < 0 || m_Core.m_ActiveWeapon >= NUM_WEAPONS)
-		m_Core.m_ActiveWeapon = 0;
+		SetActiveWeapon(0);
 }
 
 void CCharacter::SetSolo(bool Solo)
@@ -31,13 +31,13 @@ void CCharacter::SetSolo(bool Solo)
 
 bool CCharacter::IsGrounded()
 {
-	if(Collision()->CheckPoint(m_Pos.x+m_ProximityRadius/2, m_Pos.y+m_ProximityRadius/2+5))
+	if(Collision()->CheckPoint(m_Pos.x + m_ProximityRadius / 2, m_Pos.y + m_ProximityRadius / 2 + 5))
 		return true;
-	if(Collision()->CheckPoint(m_Pos.x-m_ProximityRadius/2, m_Pos.y+m_ProximityRadius/2+5))
+	if(Collision()->CheckPoint(m_Pos.x - m_ProximityRadius / 2, m_Pos.y + m_ProximityRadius / 2 + 5))
 		return true;
 
 	int MoveRestrictionsBelow = Collision()->GetMoveRestrictions(m_Pos + vec2(0, m_ProximityRadius / 2 + 4), 0.0f);
-	if(MoveRestrictionsBelow&CANTMOVE_DOWN)
+	if(MoveRestrictionsBelow & CANTMOVE_DOWN)
 	{
 		return true;
 	}
@@ -55,7 +55,7 @@ void CCharacter::HandleJetpack()
 	bool FullAuto = false;
 	if(m_Core.m_ActiveWeapon == WEAPON_GRENADE || m_Core.m_ActiveWeapon == WEAPON_SHOTGUN || m_Core.m_ActiveWeapon == WEAPON_LASER)
 		FullAuto = true;
-	if (m_Jetpack && m_Core.m_ActiveWeapon == WEAPON_GUN)
+	if(m_Jetpack && m_Core.m_ActiveWeapon == WEAPON_GUN)
 		FullAuto = true;
 
 	// check if we gonna fire
@@ -63,7 +63,7 @@ void CCharacter::HandleJetpack()
 	if(CountInput(m_LatestPrevInput.m_Fire, m_LatestInput.m_Fire).m_Presses)
 		WillFire = true;
 
-	if(FullAuto && (m_LatestInput.m_Fire&1) && m_aWeapons[m_Core.m_ActiveWeapon].m_Ammo)
+	if(FullAuto && (m_LatestInput.m_Fire & 1) && m_aWeapons[m_Core.m_ActiveWeapon].m_Ammo)
 		WillFire = true;
 
 	if(!WillFire)
@@ -77,16 +77,16 @@ void CCharacter::HandleJetpack()
 
 	switch(m_Core.m_ActiveWeapon)
 	{
-		case WEAPON_GUN:
+	case WEAPON_GUN:
+	{
+		if(m_Jetpack)
 		{
-			if (m_Jetpack)
-			{
-				float Strength = GetTuning(m_TuneZone)->m_JetpackStrength;
-				if(!m_TuneZone)
-					Strength = m_LastJetpackStrength;
-				TakeDamage(Direction * -1.0f * (Strength / 100.0f / 6.11f), 0, GetCID(), m_Core.m_ActiveWeapon);
-			}
+			float Strength = GetTuning(m_TuneZone)->m_JetpackStrength;
+			if(!m_TuneZone)
+				Strength = m_LastJetpackStrength;
+			TakeDamage(Direction * -1.0f * (Strength / 100.0f / 6.11f), 0, GetCID(), m_Core.m_ActiveWeapon);
 		}
+	}
 	}
 }
 
@@ -104,7 +104,7 @@ void CCharacter::HandleNinja()
 	if(m_Core.m_ActiveWeapon != WEAPON_NINJA)
 		return;
 
-	if ((GameWorld()->GameTick() - m_Ninja.m_ActivationTick) > (g_pData->m_Weapons.m_Ninja.m_Duration * GameWorld()->GameTickSpeed() / 1000))
+	if((GameWorld()->GameTick() - m_Ninja.m_ActivationTick) > (g_pData->m_Weapons.m_Ninja.m_Duration * GameWorld()->GameTickSpeed() / 1000))
 	{
 		// time's up, return
 		RemoveNinja();
@@ -116,13 +116,13 @@ void CCharacter::HandleNinja()
 
 	m_Ninja.m_CurrentMoveTime--;
 
-	if (m_Ninja.m_CurrentMoveTime == 0)
+	if(m_Ninja.m_CurrentMoveTime == 0)
 	{
 		// reset velocity
-		m_Core.m_Vel = m_Ninja.m_ActivationDir*m_Ninja.m_OldVelAmount;
+		m_Core.m_Vel = m_Ninja.m_ActivationDir * m_Ninja.m_OldVelAmount;
 	}
 
-	if (m_Ninja.m_CurrentMoveTime > 0)
+	if(m_Ninja.m_CurrentMoveTime > 0)
 	{
 		// Set velocity
 		m_Core.m_Vel = m_Ninja.m_ActivationDir * g_pData->m_Weapons.m_Ninja.m_Velocity;
@@ -138,37 +138,37 @@ void CCharacter::HandleNinja()
 			vec2 Dir = m_Pos - OldPos;
 			float Radius = m_ProximityRadius * 2.0f;
 			vec2 Center = OldPos + Dir * 0.5f;
-			int Num = GameWorld()->FindEntities(Center, Radius, (CEntity**)aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+			int Num = GameWorld()->FindEntities(Center, Radius, (CEntity **)aEnts, MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
 
 			// check that we're not in solo part
-			if (TeamsCore()->GetSolo(GetCID()))
+			if(TeamsCore()->GetSolo(GetCID()))
 				return;
 
-			for (int i = 0; i < Num; ++i)
+			for(int i = 0; i < Num; ++i)
 			{
-				if (aEnts[i] == this)
+				if(aEnts[i] == this)
 					continue;
 
 				// Don't hit players in other teams
-				if (Team() != aEnts[i]->Team())
+				if(Team() != aEnts[i]->Team())
 					continue;
 
 				// Don't hit players in solo parts
-				if (TeamsCore()->GetSolo(aEnts[i]->GetCID()))
+				if(TeamsCore()->GetSolo(aEnts[i]->GetCID()))
 					return;
 
 				// make sure we haven't Hit this object before
 				bool bAlreadyHit = false;
-				for (int j = 0; j < m_NumObjectsHit; j++)
+				for(int j = 0; j < m_NumObjectsHit; j++)
 				{
-					if (m_aHitObjects[j] == aEnts[i]->GetCID())
+					if(m_aHitObjects[j] == aEnts[i]->GetCID())
 						bAlreadyHit = true;
 				}
-				if (bAlreadyHit)
+				if(bAlreadyHit)
 					continue;
 
 				// check so we are sufficiently close
-				if (distance(aEnts[i]->m_Pos, m_Pos) > (m_ProximityRadius * 2.0f))
+				if(distance(aEnts[i]->m_Pos, m_Pos) > (m_ProximityRadius * 2.0f))
 					continue;
 
 				// Hit a player, give him damage and stuffs...
@@ -208,11 +208,11 @@ void CCharacter::HandleWeaponSwitch()
 		WantedWeapon = m_QueuedWeapon;
 
 	bool Anything = false;
-	 for(int i = 0; i < NUM_WEAPONS - 1; ++i)
-		 if(m_aWeapons[i].m_Got)
-			 Anything = true;
-	 if(!Anything)
-		 return;
+	for(int i = 0; i < NUM_WEAPONS - 1; ++i)
+		if(m_aWeapons[i].m_Got)
+			Anything = true;
+	if(!Anything)
+		return;
 	// select Weapon
 	int Next = CountInput(m_LatestPrevInput.m_NextWeapon, m_LatestInput.m_NextWeapon).m_Presses;
 	int Prev = CountInput(m_LatestPrevInput.m_PrevWeapon, m_LatestInput.m_PrevWeapon).m_Presses;
@@ -221,7 +221,7 @@ void CCharacter::HandleWeaponSwitch()
 	{
 		while(Next) // Next Weapon selection
 		{
-			WantedWeapon = (WantedWeapon+1)%NUM_WEAPONS;
+			WantedWeapon = (WantedWeapon + 1) % NUM_WEAPONS;
 			if(m_aWeapons[WantedWeapon].m_Got)
 				Next--;
 		}
@@ -231,7 +231,7 @@ void CCharacter::HandleWeaponSwitch()
 	{
 		while(Prev) // Prev Weapon selection
 		{
-			WantedWeapon = (WantedWeapon-1)<0?NUM_WEAPONS-1:WantedWeapon-1;
+			WantedWeapon = (WantedWeapon - 1) < 0 ? NUM_WEAPONS - 1 : WantedWeapon - 1;
 			if(m_aWeapons[WantedWeapon].m_Got)
 				Prev--;
 		}
@@ -239,7 +239,7 @@ void CCharacter::HandleWeaponSwitch()
 
 	// Direct Weapon selection
 	if(m_LatestInput.m_WantedWeapon)
-		WantedWeapon = m_Input.m_WantedWeapon-1;
+		WantedWeapon = m_Input.m_WantedWeapon - 1;
 
 	// check for insane values
 	if(WantedWeapon >= 0 && WantedWeapon < NUM_WEAPONS && WantedWeapon != m_Core.m_ActiveWeapon && m_aWeapons[WantedWeapon].m_Got)
@@ -279,7 +279,7 @@ void CCharacter::FireWeapon()
 	if(CountInput(m_LatestPrevInput.m_Fire, m_LatestInput.m_Fire).m_Presses)
 		WillFire = true;
 
-	if(FullAuto && (m_LatestInput.m_Fire&1) && m_aWeapons[m_Core.m_ActiveWeapon].m_Ammo)
+	if(FullAuto && (m_LatestInput.m_Fire & 1) && m_aWeapons[m_Core.m_ActiveWeapon].m_Ammo)
 		WillFire = true;
 
 	if(!WillFire)
@@ -291,167 +291,172 @@ void CCharacter::FireWeapon()
 		return;
 	}
 
-	vec2 ProjStartPos = m_Pos+Direction*m_ProximityRadius*0.75f;
+	vec2 ProjStartPos = m_Pos + Direction * m_ProximityRadius * 0.75f;
 
 	switch(m_Core.m_ActiveWeapon)
 	{
-		case WEAPON_HAMMER:
+	case WEAPON_HAMMER:
+	{
+		// reset objects Hit
+		m_NumObjectsHit = 0;
+
+		if(m_Hit & DISABLE_HIT_HAMMER)
+			break;
+
+		CCharacter *apEnts[MAX_CLIENTS];
+		int Hits = 0;
+		int Num = GameWorld()->FindEntities(ProjStartPos, m_ProximityRadius * 0.5f, (CEntity **)apEnts,
+			MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+
+		for(int i = 0; i < Num; ++i)
 		{
-			// reset objects Hit
-			m_NumObjectsHit = 0;
+			CCharacter *pTarget = apEnts[i];
 
-			if (m_Hit&DISABLE_HIT_HAMMER) break;
+			if((pTarget == this || (pTarget->IsAlive() && !CanCollide(pTarget->GetCID()))))
+				continue;
 
-			CCharacter *apEnts[MAX_CLIENTS];
-			int Hits = 0;
-			int Num = GameWorld()->FindEntities(ProjStartPos, m_ProximityRadius*0.5f, (CEntity**)apEnts,
-														MAX_CLIENTS, CGameWorld::ENTTYPE_CHARACTER);
+			// set his velocity to fast upward (for now)
 
-			for (int i = 0; i < Num; ++i)
+			vec2 Dir;
+			if(length(pTarget->m_Pos - m_Pos) > 0.0f)
+				Dir = normalize(pTarget->m_Pos - m_Pos);
+			else
+				Dir = vec2(0.f, -1.f);
+
+			float Strength = GetTuning(m_TuneZone)->m_HammerStrength;
+
+			vec2 Temp = pTarget->m_Core.m_Vel + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f;
+			Temp = ClampVel(pTarget->m_MoveRestrictions, Temp);
+			Temp -= pTarget->m_Core.m_Vel;
+
+			vec2 Force = vec2(0.f, -1.0f) + Temp;
+
+			if(GameWorld()->m_WorldConfig.m_IsFNG)
 			{
-				CCharacter *pTarget = apEnts[i];
-
-				if((pTarget == this || (pTarget->IsAlive() && !CanCollide(pTarget->GetCID()))))
-					continue;
-
-				// set his velocity to fast upward (for now)
-
-				vec2 Dir;
-				if (length(pTarget->m_Pos - m_Pos) > 0.0f)
-					Dir = normalize(pTarget->m_Pos - m_Pos);
-				else
-					Dir = vec2(0.f, -1.f);
-
-				float Strength = GetTuning(m_TuneZone)->m_HammerStrength;
-
-				vec2 Temp = pTarget->m_Core.m_Vel + normalize(Dir + vec2(0.f, -1.1f)) * 10.0f;
-				Temp = ClampVel(pTarget->m_MoveRestrictions, Temp);
-				Temp -= pTarget->m_Core.m_Vel;
-
-				vec2 Force = vec2(0.f, -1.0f) + Temp;
-
-				if(GameWorld()->m_WorldConfig.m_IsFNG)
+				if(m_GameTeam == pTarget->m_GameTeam && pTarget->m_LastSnapWeapon == WEAPON_NINJA) // melt hammer
 				{
-					if(m_GameTeam == pTarget->m_GameTeam && pTarget->m_LastSnapWeapon == WEAPON_NINJA) // melt hammer
-					{
-						Force.x *= 50 * 0.01f;
-						Force.y *= 50 * 0.01f;
-					}
-					else
-					{
-						Force.x *= 320 * 0.01f;
-						Force.y *= 120 * 0.01f;
-					}
+					Force.x *= 50 * 0.01f;
+					Force.y *= 50 * 0.01f;
 				}
 				else
-					Force *= Strength;
-
-				pTarget->TakeDamage(Force, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
-					GetCID(), m_Core.m_ActiveWeapon);
-				pTarget->UnFreeze();
-
-				Hits++;
-			}
-
-			// if we Hit anything, we have to wait for the reload
-			if(Hits)
-				m_ReloadTimer = GameWorld()->GameTickSpeed()/3;
-
-		} break;
-
-		case WEAPON_GUN:
-		{
-			if (!m_Jetpack)
-			{
-				int Lifetime = (int)(GameWorld()->GameTickSpeed()*GetTuning(m_TuneZone)->m_GunLifetime);
-
-				new CProjectile
-						(
-						GameWorld(),
-						WEAPON_GUN,//Type
-						GetCID(),//Owner
-						ProjStartPos,//Pos
-						Direction,//Dir
-						Lifetime,//Span
-						0,//Freeze
-						0,//Explosive
-						0,//Force
-						-1//SoundImpact
-						);
-			}
-		} break;
-
-		case WEAPON_SHOTGUN:
-		{
-			if(GameWorld()->m_WorldConfig.m_IsVanilla)
-			{
-				int ShotSpread = 2;
-				for(int i = -ShotSpread; i <= ShotSpread; ++i)
 				{
-					float Spreading[] = {-0.185f, -0.070f, 0, 0.070f, 0.185f};
-					float a = GetAngle(Direction);
-					a += Spreading[i+2];
-					float v = 1-(absolute(i)/(float)ShotSpread);
-					float Speed = mix((float)Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
-					new CProjectile
-						(
-						GameWorld(),
-						WEAPON_SHOTGUN,//Type
-						GetCID(),//Owner
-						ProjStartPos,//Pos
-						vec2(cosf(a), sinf(a))*Speed,//Dir
-						(int)(GameWorld()->GameTickSpeed()*Tuning()->m_ShotgunLifetime),//Span
-						0,//Freeze
-						0,//Explosive
-						0,//Force
-						-1//SoundImpact
-						);
+					Force.x *= 320 * 0.01f;
+					Force.y *= 120 * 0.01f;
 				}
 			}
-			else if(GameWorld()->m_WorldConfig.m_IsDDRace)
-			{
-				float LaserReach = GetTuning(m_TuneZone)->m_LaserReach;
+			else
+				Force *= Strength;
 
-				new CLaser(GameWorld(), m_Pos, Direction, LaserReach, GetCID(), WEAPON_SHOTGUN);
-			}
-		} break;
+			pTarget->TakeDamage(Force, g_pData->m_Weapons.m_Hammer.m_pBase->m_Damage,
+				GetCID(), m_Core.m_ActiveWeapon);
+			pTarget->UnFreeze();
 
-		case WEAPON_GRENADE:
+			Hits++;
+		}
+
+		// if we Hit anything, we have to wait for the reload
+		if(Hits)
 		{
-			int Lifetime = (int)(GameWorld()->GameTickSpeed()*GetTuning(m_TuneZone)->m_GrenadeLifetime);
+			float FireDelay = GetTuning(m_TuneZone)->m_HammerHitFireDelay;
+			m_ReloadTimer = FireDelay * GameWorld()->GameTickSpeed() / 1000;
+		}
+	}
+	break;
 
-			new CProjectile
-					(
+	case WEAPON_GUN:
+	{
+		if(!m_Jetpack)
+		{
+			int Lifetime = (int)(GameWorld()->GameTickSpeed() * GetTuning(m_TuneZone)->m_GunLifetime);
+
+			new CProjectile(
+				GameWorld(),
+				WEAPON_GUN, //Type
+				GetCID(), //Owner
+				ProjStartPos, //Pos
+				Direction, //Dir
+				Lifetime, //Span
+				0, //Freeze
+				0, //Explosive
+				0, //Force
+				-1 //SoundImpact
+			);
+		}
+	}
+	break;
+
+	case WEAPON_SHOTGUN:
+	{
+		if(GameWorld()->m_WorldConfig.m_IsVanilla)
+		{
+			int ShotSpread = 2;
+			for(int i = -ShotSpread; i <= ShotSpread; ++i)
+			{
+				float Spreading[] = {-0.185f, -0.070f, 0, 0.070f, 0.185f};
+				float a = angle(Direction);
+				a += Spreading[i + 2];
+				float v = 1 - (absolute(i) / (float)ShotSpread);
+				float Speed = mix((float)Tuning()->m_ShotgunSpeeddiff, 1.0f, v);
+				new CProjectile(
 					GameWorld(),
-					WEAPON_GRENADE,//Type
-					GetCID(),//Owner
-					ProjStartPos,//Pos
-					Direction,//Dir
-					Lifetime,//Span
-					0,//Freeze
-					true,//Explosive
-					0,//Force
-					SOUND_GRENADE_EXPLODE//SoundImpact
-					);//SoundImpact
-		} break;
-
-		case WEAPON_LASER:
+					WEAPON_SHOTGUN, //Type
+					GetCID(), //Owner
+					ProjStartPos, //Pos
+					vec2(cosf(a), sinf(a)) * Speed, //Dir
+					(int)(GameWorld()->GameTickSpeed() * Tuning()->m_ShotgunLifetime), //Span
+					0, //Freeze
+					0, //Explosive
+					0, //Force
+					-1 //SoundImpact
+				);
+			}
+		}
+		else if(GameWorld()->m_WorldConfig.m_IsDDRace)
 		{
 			float LaserReach = GetTuning(m_TuneZone)->m_LaserReach;
 
-			new CLaser(GameWorld(), m_Pos, Direction, LaserReach, GetCID(), WEAPON_LASER);
-		} break;
+			new CLaser(GameWorld(), m_Pos, Direction, LaserReach, GetCID(), WEAPON_SHOTGUN);
+		}
+	}
+	break;
 
-		case WEAPON_NINJA:
-		{
-			// reset Hit objects
-			m_NumObjectsHit = 0;
+	case WEAPON_GRENADE:
+	{
+		int Lifetime = (int)(GameWorld()->GameTickSpeed() * GetTuning(m_TuneZone)->m_GrenadeLifetime);
 
-			m_Ninja.m_ActivationDir = Direction;
-			m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * GameWorld()->GameTickSpeed() / 1000;
-			m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
-		} break;
+		new CProjectile(
+			GameWorld(),
+			WEAPON_GRENADE, //Type
+			GetCID(), //Owner
+			ProjStartPos, //Pos
+			Direction, //Dir
+			Lifetime, //Span
+			0, //Freeze
+			true, //Explosive
+			0, //Force
+			SOUND_GRENADE_EXPLODE //SoundImpact
+		); //SoundImpact
+	}
+	break;
 
+	case WEAPON_LASER:
+	{
+		float LaserReach = GetTuning(m_TuneZone)->m_LaserReach;
+
+		new CLaser(GameWorld(), m_Pos, Direction, LaserReach, GetCID(), WEAPON_LASER);
+	}
+	break;
+
+	case WEAPON_NINJA:
+	{
+		// reset Hit objects
+		m_NumObjectsHit = 0;
+
+		m_Ninja.m_ActivationDir = Direction;
+		m_Ninja.m_CurrentMoveTime = g_pData->m_Weapons.m_Ninja.m_Movetime * GameWorld()->GameTickSpeed() / 1000;
+		m_Ninja.m_OldVelAmount = length(m_Core.m_Vel);
+	}
+	break;
 	}
 
 	m_AttackTick = GameWorld()->GameTick();
@@ -488,15 +493,19 @@ void CCharacter::GiveNinja()
 {
 	m_Ninja.m_ActivationTick = GameWorld()->GameTick();
 	m_aWeapons[WEAPON_NINJA].m_Got = true;
-	if (!m_FreezeTime)
+	if(!m_FreezeTime)
 		m_aWeapons[WEAPON_NINJA].m_Ammo = -1;
-	if (m_Core.m_ActiveWeapon != WEAPON_NINJA)
+	if(m_Core.m_ActiveWeapon != WEAPON_NINJA)
 		m_LastWeapon = m_Core.m_ActiveWeapon;
 	m_Core.m_ActiveWeapon = WEAPON_NINJA;
 }
 
 void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 {
+	// skip the input if chat is active
+	if(pNewInput->m_PlayerFlags & PLAYERFLAG_CHATTING)
+		return;
+
 	// copy new input
 	mem_copy(&m_Input, pNewInput, sizeof(m_Input));
 	//m_NumInputs++;
@@ -510,6 +519,15 @@ void CCharacter::OnPredictedInput(CNetObj_PlayerInput *pNewInput)
 
 void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 {
+	// skip the input if chat is active
+	if(pNewInput->m_PlayerFlags & PLAYERFLAG_CHATTING)
+	{
+		// reset input
+		ResetInput();
+
+		return;
+	}
+
 	m_NumInputs++;
 	mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
 	mem_copy(&m_LatestInput, pNewInput, sizeof(m_LatestInput));
@@ -525,6 +543,18 @@ void CCharacter::OnDirectInput(CNetObj_PlayerInput *pNewInput)
 	}
 
 	mem_copy(&m_LatestPrevInput, &m_LatestInput, sizeof(m_LatestInput));
+}
+
+void CCharacter::ResetInput()
+{
+	m_Input.m_Direction = 0;
+	//m_Input.m_Hook = 0;
+	// simulate releasing the fire button
+	if((m_Input.m_Fire & 1) != 0)
+		m_Input.m_Fire++;
+	m_Input.m_Fire &= INPUT_STATE_MASK;
+	m_Input.m_Jump = 0;
+	m_LatestPrevInput = m_LatestInput = m_Input;
 }
 
 void CCharacter::Tick()
@@ -586,17 +616,18 @@ void CCharacter::HandleSkippableTiles(int Index)
 	// handle speedup tiles
 	if(Collision()->IsSpeedup(Index))
 	{
-		vec2 Direction, MaxVel, TempVel = m_Core.m_Vel;
+		vec2 Direction, TempVel = m_Core.m_Vel;
 		int Force, MaxSpeed = 0;
 		float TeeAngle, SpeederAngle, DiffAngle, SpeedLeft, TeeSpeed;
 		Collision()->GetSpeedup(Index, &Direction, &Force, &MaxSpeed);
 		if(Force == 255 && MaxSpeed)
 		{
-			m_Core.m_Vel = Direction * (MaxSpeed/5);
+			m_Core.m_Vel = Direction * (MaxSpeed / 5);
 		}
 		else
 		{
-			if(MaxSpeed > 0 && MaxSpeed < 5) MaxSpeed = 5;
+			if(MaxSpeed > 0 && MaxSpeed < 5)
+				MaxSpeed = 5;
 			if(MaxSpeed > 0)
 			{
 				if(Direction.x > 0.0000001f)
@@ -643,9 +674,7 @@ void CCharacter::HandleSkippableTiles(int Index)
 
 bool CCharacter::IsSwitchActiveCb(int Number, void *pUser)
 {
-	CCharacter *pThis = (CCharacter *)pUser;
-	CCollision *pCollision = pThis->Collision();
-	return pCollision->m_pSwitchers && pCollision->m_pSwitchers[Number].m_Status[pThis->Team()] && pThis->Team() != TEAM_SUPER;
+	return false; //switch state is not implemented in prediction yet
 }
 
 void CCharacter::HandleTiles(int Index)
@@ -656,7 +685,7 @@ void CCharacter::HandleTiles(int Index)
 	m_MoveRestrictions = Collision()->GetMoveRestrictions(IsSwitchActiveCb, this, m_Pos);
 
 	// stopper
-	if(m_Core.m_Vel.y > 0 && (m_MoveRestrictions&CANTMOVE_DOWN))
+	if(m_Core.m_Vel.y > 0 && (m_MoveRestrictions & CANTMOVE_DOWN))
 	{
 		m_Core.m_Jumped = 0;
 		m_Core.m_JumpedTotal = 0;
@@ -693,44 +722,44 @@ void CCharacter::HandleTiles(int Index)
 	}
 
 	// endless hook
-	if(((m_TileIndex == TILE_EHOOK_START) || (m_TileFIndex == TILE_EHOOK_START)) && !m_EndlessHook)
+	if(((m_TileIndex == TILE_EHOOK_ENABLE) || (m_TileFIndex == TILE_EHOOK_ENABLE)) && !m_EndlessHook)
 	{
 		m_EndlessHook = true;
 		m_Core.m_EndlessHook = true;
 	}
-	else if(((m_TileIndex == TILE_EHOOK_END) || (m_TileFIndex == TILE_EHOOK_END)) && m_EndlessHook)
+	else if(((m_TileIndex == TILE_EHOOK_DISABLE) || (m_TileFIndex == TILE_EHOOK_DISABLE)) && m_EndlessHook)
 	{
 		m_EndlessHook = false;
 		m_Core.m_EndlessHook = false;
 	}
 
 	// collide with others
-	if(((m_TileIndex == TILE_NPC_END) || (m_TileFIndex == TILE_NPC_END)) && m_Core.m_Collision)
+	if(((m_TileIndex == TILE_NPC_DISABLE) || (m_TileFIndex == TILE_NPC_DISABLE)) && m_Core.m_Collision)
 	{
 		m_Core.m_Collision = false;
 	}
-	else if(((m_TileIndex == TILE_NPC_START) || (m_TileFIndex == TILE_NPC_START)) && !m_Core.m_Collision)
+	else if(((m_TileIndex == TILE_NPC_ENABLE) || (m_TileFIndex == TILE_NPC_ENABLE)) && !m_Core.m_Collision)
 	{
 		m_Core.m_Collision = true;
 	}
 
 	// hook others
-	if(((m_TileIndex == TILE_NPH_END) || (m_TileFIndex == TILE_NPH_END)) && m_Core.m_Hook)
+	if(((m_TileIndex == TILE_NPH_DISABLE) || (m_TileFIndex == TILE_NPH_DISABLE)) && m_Core.m_Hook)
 	{
 		m_Core.m_Hook = false;
 	}
-	else if(((m_TileIndex == TILE_NPH_START) || (m_TileFIndex == TILE_NPH_START)) && !m_Core.m_Hook)
+	else if(((m_TileIndex == TILE_NPH_ENABLE) || (m_TileFIndex == TILE_NPH_ENABLE)) && !m_Core.m_Hook)
 	{
 		m_Core.m_Hook = true;
 	}
 
 	// unlimited air jumps
-	if(((m_TileIndex == TILE_SUPER_START) || (m_TileFIndex == TILE_SUPER_START)) && !m_SuperJump)
+	if(((m_TileIndex == TILE_UNLIMITED_JUMPS_ENABLE) || (m_TileFIndex == TILE_UNLIMITED_JUMPS_ENABLE)) && !m_SuperJump)
 	{
 		m_SuperJump = true;
 		m_Core.m_EndlessJump = true;
 	}
-	else if(((m_TileIndex == TILE_SUPER_END) || (m_TileFIndex == TILE_SUPER_END)) && m_SuperJump)
+	else if(((m_TileIndex == TILE_UNLIMITED_JUMPS_DISABLE) || (m_TileFIndex == TILE_UNLIMITED_JUMPS_DISABLE)) && m_SuperJump)
 	{
 		m_SuperJump = false;
 		m_Core.m_EndlessJump = false;
@@ -748,23 +777,23 @@ void CCharacter::HandleTiles(int Index)
 	}
 
 	// jetpack gun
-	if(((m_TileIndex == TILE_JETPACK_START) || (m_TileFIndex == TILE_JETPACK_START)) && !m_Jetpack)
+	if(((m_TileIndex == TILE_JETPACK_ENABLE) || (m_TileFIndex == TILE_JETPACK_ENABLE)) && !m_Jetpack)
 	{
 		m_Jetpack = true;
 		m_Core.m_Jetpack = true;
 	}
-	else if(((m_TileIndex == TILE_JETPACK_END) || (m_TileFIndex == TILE_JETPACK_END)) && m_Jetpack)
+	else if(((m_TileIndex == TILE_JETPACK_DISABLE) || (m_TileFIndex == TILE_JETPACK_DISABLE)) && m_Jetpack)
 	{
 		m_Jetpack = false;
 		m_Core.m_Jetpack = false;
 	}
 
 	// solo part
-	if(((m_TileIndex == TILE_SOLO_START) || (m_TileFIndex == TILE_SOLO_START)) && !TeamsCore()->GetSolo(GetCID()))
+	if(((m_TileIndex == TILE_SOLO_ENABLE) || (m_TileFIndex == TILE_SOLO_ENABLE)) && !TeamsCore()->GetSolo(GetCID()))
 	{
 		SetSolo(true);
 	}
-	else if(((m_TileIndex == TILE_SOLO_END) || (m_TileFIndex == TILE_SOLO_END)) && TeamsCore()->GetSolo(GetCID()))
+	else if(((m_TileIndex == TILE_SOLO_DISABLE) || (m_TileFIndex == TILE_SOLO_DISABLE)) && TeamsCore()->GetSolo(GetCID()))
 	{
 		SetSolo(false);
 	}
@@ -782,40 +811,15 @@ void CCharacter::HandleTiles(int Index)
 	}
 
 	// handle switch tiles
-	if(Collision()->IsSwitch(MapIndex) == TILE_SWITCHOPEN && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) > 0)
+	if(Collision()->IsSwitch(MapIndex) == TILE_FREEZE && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) == 0)
 	{
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()] = true;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_EndTick[Team()] = 0;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Type[Team()] = TILE_SWITCHOPEN;
+		Freeze(Collision()->GetSwitchDelay(MapIndex));
 	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_SWITCHTIMEDOPEN && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) > 0)
-	{
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()] = true;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_EndTick[Team()] = GameWorld()->GameTick() + 1 + Collision()->GetSwitchDelay(MapIndex)*GameWorld()->GameTickSpeed() ;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Type[Team()] = TILE_SWITCHTIMEDOPEN;
-	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_SWITCHTIMEDCLOSE && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) > 0)
-	{
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()] = false;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_EndTick[Team()] = GameWorld()->GameTick() + 1 + Collision()->GetSwitchDelay(MapIndex)*GameWorld()->GameTickSpeed();
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Type[Team()] = TILE_SWITCHTIMEDCLOSE;
-	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_SWITCHCLOSE && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) > 0)
-	{
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()] = false;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_EndTick[Team()] = 0;
-		Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Type[Team()] = TILE_SWITCHCLOSE;
-	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_FREEZE && Team() != TEAM_SUPER)
-	{
-		if(Collision()->GetSwitchNumber(MapIndex) == 0 || Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()])
-			Freeze(Collision()->GetSwitchDelay(MapIndex));
-	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_DFREEZE && Team() != TEAM_SUPER && (Collision()->GetSwitchNumber(MapIndex) == 0 || Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()]))
+	else if(Collision()->IsSwitch(MapIndex) == TILE_DFREEZE && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) == 0)
 	{
 		m_DeepFreeze = true;
 	}
-	else if(Collision()->IsSwitch(MapIndex) == TILE_DUNFREEZE && Team() != TEAM_SUPER && (Collision()->GetSwitchNumber(MapIndex) == 0 || Collision()->m_pSwitchers[Collision()->GetSwitchNumber(MapIndex)].m_Status[Team()]))
+	else if(Collision()->IsSwitch(MapIndex) == TILE_DUNFREEZE && Team() != TEAM_SUPER && Collision()->GetSwitchNumber(MapIndex) == 0)
 	{
 		m_DeepFreeze = false;
 	}
@@ -823,7 +827,7 @@ void CCharacter::HandleTiles(int Index)
 	{
 		int newJumps = Collision()->GetSwitchDelay(MapIndex);
 
-		if (newJumps != m_Core.m_Jumps)
+		if(newJumps != m_Core.m_Jumps)
 		{
 			m_Core.m_Jumps = newJumps;
 		}
@@ -833,9 +837,11 @@ void CCharacter::HandleTiles(int Index)
 void CCharacter::HandleTuneLayer()
 {
 	int CurrentIndex = Collision()->GetMapIndex(m_Pos);
-	m_TuneZone = GameWorld()->m_WorldConfig.m_PredictTiles ? Collision()->IsTune(CurrentIndex) : 0;
+	SetTuneZone(GameWorld()->m_WorldConfig.m_UseTuneZones ? Collision()->IsTune(CurrentIndex) : 0);
 
-	m_Core.m_pWorld->m_Tuning[g_Config.m_ClDummy] = *GetTuning(m_TuneZone); // throw tunings (from specific zone if in a tunezone) into gamecore
+	if(m_IsLocal)
+		m_Core.m_pWorld->m_Tuning[g_Config.m_ClDummy] = *GetTuning(m_TuneZone); // throw tunings (from specific zone if in a tunezone) into gamecore if the character is local
+	m_Core.m_Tuning = *GetTuning(m_TuneZone);
 }
 
 void CCharacter::DDRaceTick()
@@ -853,7 +859,7 @@ void CCharacter::DDRaceTick()
 			m_Input.m_Jump = 0;
 			m_Input.m_Hook = 0;
 		}
-		if (m_FreezeTime == 1)
+		if(m_FreezeTime == 1)
 			UnFreeze();
 	}
 
@@ -865,32 +871,32 @@ void CCharacter::DDRacePostCoreTick()
 	if(!GameWorld()->m_WorldConfig.m_PredictDDRace)
 		return;
 
-	if (m_EndlessHook)
+	if(m_EndlessHook)
 		m_Core.m_HookTick = 0;
 
 	m_FrozenLastTick = false;
 
-	if (m_DeepFreeze && !m_Super)
+	if(m_DeepFreeze && !m_Super)
 		Freeze();
 
-	if (m_Core.m_Jumps == 0 && !m_Super)
+	if(m_Core.m_Jumps == 0 && !m_Super)
 		m_Core.m_Jumped = 3;
-	else if (m_Core.m_Jumps == 1 && m_Core.m_Jumped > 0)
+	else if(m_Core.m_Jumps == 1 && m_Core.m_Jumped > 0)
 		m_Core.m_Jumped = 3;
-	else if (m_Core.m_JumpedTotal < m_Core.m_Jumps - 1 && m_Core.m_Jumped > 1)
+	else if(m_Core.m_JumpedTotal < m_Core.m_Jumps - 1 && m_Core.m_Jumped > 1)
 		m_Core.m_Jumped = 1;
 
-	if ((m_Super || m_SuperJump) && m_Core.m_Jumped > 1)
+	if((m_Super || m_SuperJump) && m_Core.m_Jumped > 1)
 		m_Core.m_Jumped = 1;
 
 	int CurrentIndex = Collision()->GetMapIndex(m_Pos);
 	HandleSkippableTiles(CurrentIndex);
 
 	// handle Anti-Skip tiles
-	std::list < int > Indices = Collision()->GetMapIndices(m_PrevPos, m_Pos);
+	std::list<int> Indices = Collision()->GetMapIndices(m_PrevPos, m_Pos);
 	if(!Indices.empty())
-		for(std::list < int >::iterator i = Indices.begin(); i != Indices.end(); i++)
-			HandleTiles(*i);
+		for(int Index : Indices)
+			HandleTiles(Index);
 	else
 	{
 		HandleTiles(CurrentIndex);
@@ -901,9 +907,9 @@ bool CCharacter::Freeze(int Seconds)
 {
 	if(!GameWorld()->m_WorldConfig.m_PredictFreeze)
 		return false;
-	if ((Seconds <= 0 || m_Super || m_FreezeTime == -1 || m_FreezeTime > Seconds * GameWorld()->GameTickSpeed()) && Seconds != -1)
-		 return false;
-	if (m_FreezeTick < GameWorld()->GameTick() - GameWorld()->GameTickSpeed() || Seconds == -1)
+	if((Seconds <= 0 || m_Super || m_FreezeTime == -1 || m_FreezeTime > Seconds * GameWorld()->GameTickSpeed()) && Seconds != -1)
+		return false;
+	if(m_FreezeTick < GameWorld()->GameTick() - GameWorld()->GameTickSpeed() || Seconds == -1)
 	{
 		m_FreezeTime = Seconds == -1 ? Seconds : Seconds * GameWorld()->GameTickSpeed();
 		m_FreezeTick = GameWorld()->GameTick();
@@ -919,7 +925,7 @@ bool CCharacter::Freeze()
 
 bool CCharacter::UnFreeze()
 {
-	if (m_FreezeTime > 0)
+	if(m_FreezeTime > 0)
 	{
 		if(!m_aWeapons[m_Core.m_ActiveWeapon].m_Got)
 			m_Core.m_ActiveWeapon = WEAPON_GUN;
@@ -957,21 +963,22 @@ void CCharacter::GiveWeapon(int Weapon, bool Remove)
 
 void CCharacter::GiveAllWeapons()
 {
-	for(int i=WEAPON_GUN;i<NUM_WEAPONS-1;i++)
+	for(int i = WEAPON_GUN; i < NUM_WEAPONS - 1; i++)
 	{
 		GiveWeapon(i);
 	}
 }
 
-CTeamsCore* CCharacter::TeamsCore()
+CTeamsCore *CCharacter::TeamsCore()
 {
 	return m_Core.m_pTeams;
 }
 
-CCharacter::CCharacter(CGameWorld *pGameWorld, int ID, CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtended)
-: CEntity(pGameWorld, CGameWorld::ENTTYPE_CHARACTER)
+CCharacter::CCharacter(CGameWorld *pGameWorld, int ID, CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtended) :
+	CEntity(pGameWorld, CGameWorld::ENTTYPE_CHARACTER)
 {
 	m_ID = ID;
+	m_IsLocal = false;
 
 	m_LastWeapon = WEAPON_HAMMER;
 	m_QueuedWeapon = -1;
@@ -994,6 +1001,12 @@ CCharacter::CCharacter(CGameWorld *pGameWorld, int ID, CNetObj_Character *pChar,
 	m_Alive = true;
 	m_TeleCheckpoint = 0;
 	m_StrongWeakID = 0;
+
+	// never intilize both to zero
+	m_Input.m_TargetX = 0;
+	m_Input.m_TargetY = -1;
+
+	m_LatestPrevInput = m_LatestInput = m_PrevInput = m_SavedInput = m_Input;
 
 	ResetPrediction();
 	Read(pChar, pExtended, false);
@@ -1028,11 +1041,14 @@ void CCharacter::ResetPrediction()
 		m_Core.m_HookedPlayer = -1;
 		m_Core.m_HookState = HOOK_IDLE;
 	}
+	m_LastWeaponSwitchTick = 0;
+	m_LastTuneZoneTick = 0;
 }
 
 void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtended, bool IsLocal)
 {
-	m_Core.Read((CNetObj_CharacterCore*) pChar);
+	m_Core.Read((CNetObj_CharacterCore *)pChar);
+	m_IsLocal = IsLocal;
 
 	if(pExtended)
 	{
@@ -1099,7 +1115,7 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 			{
 				if(m_Core.m_ActiveWeapon == WEAPON_NINJA)
 				{
-					SetNinjaActivationDir(vec2(0,0));
+					SetNinjaActivationDir(vec2(0, 0));
 					SetNinjaActivationTick(-500);
 					SetNinjaCurrentMoveTime(0);
 				}
@@ -1126,7 +1142,7 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 		// number of jumps
 		if(GameWorld()->m_WorldConfig.m_PredictTiles)
 		{
-			if(pChar->m_Jumped&2)
+			if(pChar->m_Jumped & 2)
 			{
 				m_SuperJump = false;
 				if(m_Core.m_Jumps > m_Core.m_JumpedTotal && m_Core.m_JumpedTotal > 0 && m_Core.m_Jumps > 2)
@@ -1152,7 +1168,7 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 		// detect unfreeze (in case the player was frozen in the tile prediction and not correctly unfrozen)
 		if(pChar->m_Emote != EMOTE_PAIN && pChar->m_Emote != EMOTE_NORMAL)
 			m_DeepFreeze = false;
-		if(pChar->m_Weapon != WEAPON_NINJA || pChar->m_AttackTick > m_FreezeTick || absolute(pChar->m_VelX) == 256*10 || !GameWorld()->m_WorldConfig.m_PredictFreeze)
+		if(pChar->m_Weapon != WEAPON_NINJA || pChar->m_AttackTick > m_FreezeTick || absolute(pChar->m_VelX) == 256 * 10 || !GameWorld()->m_WorldConfig.m_PredictFreeze)
 		{
 			m_DeepFreeze = false;
 			UnFreeze();
@@ -1168,19 +1184,20 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 	if(distance(m_PrevPos, m_Pos) > 10.f * 32.f) // reset prevpos if the distance is high
 		m_PrevPos = m_Pos;
 
-	if(pChar->m_Jumped&2)
+	if(pChar->m_Jumped & 2)
 		m_Core.m_JumpedTotal = m_Core.m_Jumps;
 	m_AttackTick = pChar->m_AttackTick;
 	m_LastSnapWeapon = pChar->m_Weapon;
 	m_Alive = true;
 
-	m_TuneZone = GameWorld()->m_WorldConfig.m_PredictTiles ? Collision()->IsTune(Collision()->GetMapIndex(m_Pos)) : 0;
+	SetTuneZone(GameWorld()->m_WorldConfig.m_UseTuneZones ? Collision()->IsTune(Collision()->GetMapIndex(m_Pos)) : 0);
 
 	// set the current weapon
 	if(pChar->m_Weapon != WEAPON_NINJA)
 	{
 		m_aWeapons[pChar->m_Weapon].m_Ammo = (GameWorld()->m_WorldConfig.m_InfiniteAmmo || GameWorld()->m_WorldConfig.m_IsDDRace || pChar->m_Weapon == WEAPON_HAMMER) ? -1 : pChar->m_AmmoCount;
-		SetActiveWeapon(pChar->m_Weapon);
+		if(pChar->m_Weapon != m_Core.m_ActiveWeapon)
+			SetActiveWeapon(pChar->m_Weapon);
 	}
 
 	// reset all input except direction and hook for non-local players (as in vanilla prediction)
@@ -1190,8 +1207,21 @@ void CCharacter::Read(CNetObj_Character *pChar, CNetObj_DDNetCharacter *pExtende
 		mem_zero(&m_SavedInput, sizeof(m_SavedInput));
 		m_Input.m_Direction = m_SavedInput.m_Direction = m_Core.m_Direction;
 		m_Input.m_Hook = m_SavedInput.m_Hook = (m_Core.m_HookState != HOOK_IDLE);
-		m_Input.m_TargetX = cosf(pChar->m_Angle/256.0f);
-		m_Input.m_TargetY = sinf(pChar->m_Angle/256.0f);
+		m_Input.m_TargetX = m_SavedInput.m_TargetX = cosf(pChar->m_Angle / 256.0f) * 256.0f;
+		m_Input.m_TargetY = m_SavedInput.m_TargetY = sinf(pChar->m_Angle / 256.0f) * 256.0f;
+	}
+
+	// in most cases the reload timer can be determined from the last attack tick
+	// (this is only needed for autofire weapons to prevent the predicted reload timer from desyncing)
+	if(IsLocal && m_Core.m_ActiveWeapon != WEAPON_HAMMER)
+	{
+		if(maximum(m_LastTuneZoneTick, m_LastWeaponSwitchTick) + GameWorld()->GameTickSpeed() < GameWorld()->GameTick())
+		{
+			float FireDelay;
+			GetTuning(m_TuneZone)->Get(38 + m_Core.m_ActiveWeapon, &FireDelay);
+			const int FireDelayTicks = FireDelay * GameWorld()->GameTickSpeed() / 1000;
+			m_ReloadTimer = maximum(0, m_AttackTick + FireDelayTicks - GameWorld()->GameTick());
+		}
 	}
 }
 
@@ -1207,4 +1237,18 @@ bool CCharacter::Match(CCharacter *pChar)
 	if(distance(pChar->m_Core.m_Pos, m_Core.m_Pos) > 32.f)
 		return false;
 	return true;
+}
+
+void CCharacter::SetActiveWeapon(int ActiveWeap)
+{
+	m_Core.m_ActiveWeapon = ActiveWeap;
+	m_LastWeaponSwitchTick = GameWorld()->GameTick();
+}
+
+void CCharacter::SetTuneZone(int Zone)
+{
+	if(Zone == m_TuneZone)
+		return;
+	m_TuneZone = Zone;
+	m_LastTuneZoneTick = GameWorld()->GameTick();
 }

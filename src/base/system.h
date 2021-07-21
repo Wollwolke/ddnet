@@ -15,6 +15,7 @@
 #endif
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -23,11 +24,11 @@
 #endif
 
 #ifdef CONF_PLATFORM_LINUX
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
-#ifdef __cplusplus
+#if defined(__cplusplus)
 extern "C" {
 #endif
 
@@ -47,17 +48,16 @@ extern "C" {
 		<dbg_break>
 */
 #ifdef CONF_DEBUG
-#define dbg_assert(test,msg) dbg_assert_imp(__FILE__, __LINE__, test, msg)
+#define dbg_assert(test, msg) dbg_assert_imp(__FILE__, __LINE__, test, msg)
 #else
-#define dbg_assert(test,msg)
+#define dbg_assert(test, msg)
 #endif
 void dbg_assert_imp(const char *filename, int line, int test, const char *msg);
-
 
 #ifdef __clang_analyzer__
 #include <assert.h>
 #undef dbg_assert
-#define dbg_assert(test,msg) assert(test)
+#define dbg_assert(test, msg) assert(test)
 #endif
 
 #ifdef __GNUC__
@@ -81,7 +81,7 @@ void dbg_assert_imp(const char *filename, int line, int test, const char *msg);
 #else
 #define dbg_break()
 #endif
-void dbg_break_imp(void);
+void dbg_break_imp();
 
 /*
 	Function: dbg_msg
@@ -99,7 +99,7 @@ void dbg_break_imp(void);
 		<dbg_assert>
 */
 void dbg_msg(const char *sys, const char *fmt, ...)
-GNUC_ATTRIBUTE((format(printf, 2, 3)));
+	GNUC_ATTRIBUTE((format(printf, 2, 3)));
 
 /* Group: Memory */
 
@@ -166,7 +166,8 @@ void mem_zero(void *block, unsigned size);
 int mem_comp(const void *a, const void *b, int size);
 
 /* Group: File IO */
-enum {
+enum
+{
 	IOFLAG_READ = 1,
 	IOFLAG_WRITE = 2,
 	IOFLAG_RANDOM = 4,
@@ -321,24 +322,23 @@ int io_flush(IOHANDLE io);
 */
 int io_error(IOHANDLE io);
 
-
 /*
 	Function: io_stdin
 		Returns an <IOHANDLE> to the standard input.
 */
-IOHANDLE io_stdin(void);
+IOHANDLE io_stdin();
 
 /*
 	Function: io_stdout
 		Returns an <IOHANDLE> to the standard output.
 */
-IOHANDLE io_stdout(void);
+IOHANDLE io_stdout();
 
 /*
 	Function: io_stderr
 		Returns an <IOHANDLE> to the standard error.
 */
-IOHANDLE io_stderr(void);
+IOHANDLE io_stderr();
 
 typedef struct ASYNCIO ASYNCIO;
 
@@ -504,7 +504,7 @@ void thread_wait(void *thread);
 	Function: thread_yield
 		Yield the current threads execution slice.
 */
-void thread_yield(void);
+void thread_yield();
 
 /*
 	Function: thread_detach
@@ -531,28 +531,95 @@ void thread_detach(void *thread);
 */
 void *thread_init_and_detach(void (*threadfunc)(void *), void *user, const char *name);
 
-/* Group: Locks */
-typedef void* LOCK;
+// Enable thread safety attributes only with clang.
+// The attributes can be safely erased when compiling with other compilers.
+#if defined(__clang__) && (!defined(SWIG))
+#define THREAD_ANNOTATION_ATTRIBUTE__(x) __attribute__((x))
+#else
+#define THREAD_ANNOTATION_ATTRIBUTE__(x) // no-op
+#endif
 
-LOCK lock_create(void);
+#define CAPABILITY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(capability(x))
+
+#define SCOPED_CAPABILITY \
+	THREAD_ANNOTATION_ATTRIBUTE__(scoped_lockable)
+
+#define GUARDED_BY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(guarded_by(x))
+
+#define PT_GUARDED_BY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(pt_guarded_by(x))
+
+#define ACQUIRED_BEFORE(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(acquired_before(__VA_ARGS__))
+
+#define ACQUIRED_AFTER(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(acquired_after(__VA_ARGS__))
+
+#define REQUIRES(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(requires_capability(__VA_ARGS__))
+
+#define REQUIRES_SHARED(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(requires_shared_capability(__VA_ARGS__))
+
+#define ACQUIRE(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(acquire_capability(__VA_ARGS__))
+
+#define ACQUIRE_SHARED(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(acquire_shared_capability(__VA_ARGS__))
+
+#define RELEASE(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(release_capability(__VA_ARGS__))
+
+#define RELEASE_SHARED(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(release_shared_capability(__VA_ARGS__))
+
+#define RELEASE_GENERIC(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(release_generic_capability(__VA_ARGS__))
+
+#define TRY_ACQUIRE(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(try_acquire_capability(__VA_ARGS__))
+
+#define TRY_ACQUIRE_SHARED(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(try_acquire_shared_capability(__VA_ARGS__))
+
+#define EXCLUDES(...) \
+	THREAD_ANNOTATION_ATTRIBUTE__(locks_excluded(__VA_ARGS__))
+
+#define ASSERT_CAPABILITY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(assert_capability(x))
+
+#define ASSERT_SHARED_CAPABILITY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(assert_shared_capability(x))
+
+#define RETURN_CAPABILITY(x) \
+	THREAD_ANNOTATION_ATTRIBUTE__(lock_returned(x))
+
+#define NO_THREAD_SAFETY_ANALYSIS \
+	THREAD_ANNOTATION_ATTRIBUTE__(no_thread_safety_analysis)
+
+/* Group: Locks */
+typedef CAPABILITY("mutex") void *LOCK;
+
+LOCK lock_create();
 void lock_destroy(LOCK lock);
 
-int lock_trylock(LOCK lock);
-void lock_wait(LOCK lock);
-void lock_unlock(LOCK lock);
-
+int lock_trylock(LOCK lock) TRY_ACQUIRE(1, lock);
+void lock_wait(LOCK lock) ACQUIRE(lock);
+void lock_unlock(LOCK lock) RELEASE(lock);
 
 /* Group: Semaphores */
 #if defined(CONF_FAMILY_WINDOWS)
-	typedef void* SEMAPHORE;
-#elif defined(CONF_PLATFORM_MACOSX)
-	#include <semaphore.h>
-	typedef sem_t* SEMAPHORE;
+typedef void *SEMAPHORE;
+#elif defined(CONF_PLATFORM_MACOS)
+#include <semaphore.h>
+typedef sem_t *SEMAPHORE;
 #elif defined(CONF_FAMILY_UNIX)
-	#include <semaphore.h>
-	typedef sem_t SEMAPHORE;
+#include <semaphore.h>
+typedef sem_t SEMAPHORE;
 #else
-	#error not implemented on this platform
+#error not implemented on this platform
 #endif
 
 void sphore_init(SEMAPHORE *sem);
@@ -560,19 +627,7 @@ void sphore_wait(SEMAPHORE *sem);
 void sphore_signal(SEMAPHORE *sem);
 void sphore_destroy(SEMAPHORE *sem);
 
-/* Group: Timer */
-#ifdef __GNUC__
-/* if compiled with -pedantic-errors it will complain about long
-	not being a C90 thing.
-*/
-__extension__ typedef long long int64;
-__extension__ typedef unsigned long long uint64;
-#else
-typedef long long int64;
-typedef unsigned long long uint64;
-#endif
-
-void set_new_tick(void);
+void set_new_tick();
 
 /*
 	Function: time_get_impl
@@ -584,7 +639,7 @@ void set_new_tick(void);
 	Remarks:
 		To know how fast the timer is ticking, see <time_freq>.
 */
-int64 time_get_impl(void);
+int64_t time_get_impl();
 
 /*
 	Function: time_get
@@ -597,7 +652,7 @@ int64 time_get_impl(void);
 		To know how fast the timer is ticking, see <time_freq>.
 		Uses <time_get_impl> to fetch the sample.
 */
-int64 time_get(void);
+int64_t time_get();
 
 /*
 	Function: time_freq
@@ -606,7 +661,7 @@ int64 time_get(void);
 	Returns:
 		Returns the frequency of the high resolution timer.
 */
-int64 time_freq(void);
+int64_t time_freq();
 
 /*
 	Function: time_timestamp
@@ -615,7 +670,34 @@ int64 time_freq(void);
 	Returns:
 		The time as a UNIX timestamp
 */
-int time_timestamp(void);
+int time_timestamp();
+
+/*
+	Function: time_houroftheday
+		Retrieves the hours since midnight (0..23)
+
+	Returns:
+		The current hour of the day
+*/
+int time_houroftheday();
+
+enum
+{
+	SEASON_SPRING = 0,
+	SEASON_SUMMER,
+	SEASON_AUTUMN,
+	SEASON_WINTER,
+	SEASON_NEWYEAR
+};
+
+/*
+	Function: time_season
+		Retrieves the current season of the year.
+
+	Returns:
+		one of the SEASON_* enum literals
+*/
+int time_season();
 
 /*
 Function: time_get_microseconds
@@ -624,7 +706,7 @@ Fetches a sample from a high resolution timer and converts it in microseconds.
 Returns:
 Current value of the timer in microseconds.
 */
-int64 time_get_microseconds(void);
+int64_t time_get_microseconds();
 
 /* Group: Network General */
 typedef struct
@@ -637,14 +719,14 @@ typedef struct
 
 enum
 {
-	NETADDR_MAXSTRSIZE = 1+(8*4+7)+1+1+5+1, // [XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:XXXXX
+	NETADDR_MAXSTRSIZE = 1 + (8 * 4 + 7) + 1 + 1 + 5 + 1, // [XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:XXXXX
 
 	NETTYPE_INVALID = 0,
 	NETTYPE_IPV4 = 1,
 	NETTYPE_IPV6 = 2,
 	NETTYPE_LINK_BROADCAST = 4,
 	NETTYPE_WEBSOCKET_IPV4 = 8,
-	NETTYPE_ALL = NETTYPE_IPV4|NETTYPE_IPV6|NETTYPE_WEBSOCKET_IPV4
+	NETTYPE_ALL = NETTYPE_IPV4 | NETTYPE_IPV6 | NETTYPE_WEBSOCKET_IPV4
 };
 
 typedef struct
@@ -669,7 +751,7 @@ typedef struct sockaddr_un UNIXSOCKETADDR;
 		You must call this function before using any other network
 		functions.
 */
-int net_init(void);
+int net_init();
 
 /*
 	Function: net_host_lookup
@@ -787,7 +869,7 @@ typedef struct
 #endif
 } MMSGS;
 
-void net_init_mmsgs(MMSGS* m);
+void net_init_mmsgs(MMSGS *m);
 
 /*
 	Function: net_udp_recv
@@ -804,7 +886,7 @@ void net_init_mmsgs(MMSGS* m);
 		On success it returns the number of bytes received. Returns -1
 		on error.
 */
-int net_udp_recv(NETSOCKET sock, NETADDR *addr, void *buffer, int maxsize, MMSGS* m, unsigned char **data);
+int net_udp_recv(NETSOCKET sock, NETADDR *addr, void *buffer, int maxsize, MMSGS *m, unsigned char **data);
 
 /*
 	Function: net_udp_close
@@ -817,7 +899,6 @@ int net_udp_recv(NETSOCKET sock, NETADDR *addr, void *buffer, int maxsize, MMSGS
 		Returns 0 on success. -1 on error.
 */
 int net_udp_close(NETSOCKET sock);
-
 
 /* Group: Network TCP */
 
@@ -926,7 +1007,7 @@ int net_tcp_close(NETSOCKET sock);
 	Returns:
 		On success it returns a handle to the socket. On failure it returns -1.
 */
-UNIXSOCKET net_unix_create_unnamed(void);
+UNIXSOCKET net_unix_create_unnamed();
 
 /*
 	Function: net_unix_send
@@ -997,19 +1078,35 @@ void str_append(char *dst, const char *src, int dst_size);
 void str_copy(char *dst, const char *src, int dst_size);
 
 /*
+	Function: str_utf8_truncate
+		Truncates a utf8 encoded string to a given length.
+
+	Parameters:
+		dst - Pointer to a buffer that shall receive the string.
+		dst_size - Size of the buffer dst.
+		str - String to be truncated.
+		truncation_len - Maximum codepoints in the returned string.
+
+	Remarks:
+		- The strings are treated as utf8-encoded zero-terminated strings.
+		- Guarantees that dst string will contain zero-termination.
+*/
+void str_utf8_truncate(char *dst, int dst_size, const char *src, int truncation_len);
+
+/*
 	Function: str_truncate
 		Truncates a string to a given length.
 
 	Parameters:
 		dst - Pointer to a buffer that shall receive the string.
 		dst_size - Size of the buffer dst.
-		str - String to be truncated.
+		src - String to be truncated.
 		truncation_len - Maximum length of the returned string (not
 		counting the zero termination).
 
 	Remarks:
 		- The strings are treated as zero-terminated strings.
-		- Guarantees that dst string will contain zero-termination.
+		- Garantees that dst string will contain zero-termination.
 */
 void str_truncate(char *dst, int dst_size, const char *src, int truncation_len);
 
@@ -1044,7 +1141,7 @@ int str_length(const char *str);
 		- Guarantees that dst string will contain zero-termination.
 */
 int str_format(char *buffer, int buffer_size, const char *format, ...)
-GNUC_ATTRIBUTE((format(printf, 3, 4)));
+	GNUC_ATTRIBUTE((format(printf, 3, 4)));
 
 /*
 	Function: str_trim_words
@@ -1061,18 +1158,6 @@ GNUC_ATTRIBUTE((format(printf, 3, 4)));
 		- The strings are treated as zero-terminated strings.
 */
 char *str_trim_words(char *str, int words);
-
-/*
-	Function: str_sanitize_strong
-		Replaces all characters below 32 and above 127 with whitespace.
-
-	Parameters:
-		str - String to sanitize.
-
-	Remarks:
-		- The strings are treated as zero-terminated strings.
-*/
-void str_sanitize_strong(char *str);
 
 /*
 	Function: str_sanitize_cc
@@ -1453,13 +1538,42 @@ int str_hex_decode(void *dst, int dst_size, const char *src);
 */
 void str_timestamp(char *buffer, int buffer_size);
 void str_timestamp_format(char *buffer, int buffer_size, const char *format)
-GNUC_ATTRIBUTE((format(strftime, 3, 0)));
+	GNUC_ATTRIBUTE((format(strftime, 3, 0)));
 void str_timestamp_ex(time_t time, char *buffer, int buffer_size, const char *format)
-GNUC_ATTRIBUTE((format(strftime, 4, 0)));
+	GNUC_ATTRIBUTE((format(strftime, 4, 0)));
 
 #define FORMAT_TIME "%H:%M:%S"
 #define FORMAT_SPACE "%Y-%m-%d %H:%M:%S"
 #define FORMAT_NOSPACE "%Y-%m-%d_%H-%M-%S"
+
+enum
+{
+	TIME_DAYS,
+	TIME_HOURS,
+	TIME_MINS,
+	TIME_HOURS_CENTISECS,
+	TIME_MINS_CENTISECS,
+};
+
+/*
+	Function: str_times
+		Formats a time string.
+
+	Parameters:
+		centisecs - Time in centiseconds, minimum value clamped to 0
+		format - Format of the time string, see enum above, for example TIME_DAYS
+		buffer - Pointer to a buffer that shall receive the time stamp string.
+		buffer_size - Size of the buffer.
+
+	Returns:
+		Number of bytes written, -1 on invalid format or buffer_size <= 0
+
+	Remarks:
+		- Guarantees that buffer string will contain zero-termination, assuming
+		  buffer_size > 0.
+*/
+int str_time(int64_t centisecs, int format, char *buffer, int buffer_size);
+int str_time_float(float secs, int format, char *buffer, int buffer_size);
 
 /*
 	Function: str_escape
@@ -1510,6 +1624,21 @@ int fs_listdir_info(const char *dir, FS_LISTDIR_INFO_CALLBACK cb, int type, void
 int fs_makedir(const char *path);
 
 /*
+	Function: fs_removedir
+		Removes a directory
+
+	Parameters:
+		path - Directory to remove
+
+	Returns:
+		Returns 0 on success. Negative value on failure.
+
+	Remarks:
+		Cannot remove a non-empty directory.
+*/
+int fs_removedir(const char *path);
+
+/*
 	Function: fs_makedir_rec_for
 		Recursively create directories for a file
 
@@ -1530,7 +1659,7 @@ int fs_makedir_rec_for(const char *path);
 
 	Remarks:
 		- Returns ~/.appname on UNIX based systems
-		- Returns ~/Library/Applications Support/appname on Mac OS X
+		- Returns ~/Library/Applications Support/appname on macOS
 		- Returns %APPDATA%/Appname on Windows based systems
 */
 int fs_storage_path(const char *appname, char *path, int max);
@@ -1595,6 +1724,7 @@ int fs_parent_dir(char *path);
 
 	Remarks:
 		- The strings are treated as zero-terminated strings.
+		- Returns an error if the path specifies a directory name.
 */
 int fs_remove(const char *filename);
 
@@ -1617,7 +1747,6 @@ int fs_rename(const char *oldname, const char *newname);
 /*
 	Group: Undocumented
 */
-
 
 /*
 	Function: net_tcp_connect_non_blocking
@@ -1645,14 +1774,14 @@ int net_set_blocking(NETSOCKET sock);
 
 	DOCTODO: serp
 */
-int net_errno(void);
+int net_errno();
 
 /*
 	Function: net_would_block
 
 	DOCTODO: serp
 */
-int net_would_block(void);
+int net_would_block();
 
 int net_socket_read_wait(NETSOCKET sock, int time);
 
@@ -1673,13 +1802,12 @@ int open_link(const char *link);
 
 void swap_endian(void *data, unsigned elem_size, unsigned num);
 
-
 typedef void (*DBG_LOGGER)(const char *line, void *user);
 typedef void (*DBG_LOGGER_FINISH)(void *user);
 void dbg_logger(DBG_LOGGER logger, DBG_LOGGER_FINISH finish, void *user);
 
-void dbg_logger_stdout(void);
-void dbg_logger_debugger(void);
+void dbg_logger_stdout();
+void dbg_logger_debugger();
 void dbg_logger_file(const char *filename);
 
 typedef struct
@@ -1689,7 +1817,6 @@ typedef struct
 	int recv_packets;
 	int recv_bytes;
 } NETSTATS;
-
 
 void net_stats(NETSTATS *stats);
 
@@ -1920,6 +2047,22 @@ int str_utf16le_encode(char *ptr, int chr);
 int str_utf8_check(const char *str);
 
 /*
+	Function: str_utf8_copy
+		Copies a utf8 string to a buffer.
+
+	Parameters:
+		dst - Pointer to a buffer that shall receive the string.
+		src - utf8 string to be copied.
+		dst_size - Size of the buffer dst.
+
+	Remarks:
+		- The strings are treated as zero-terminated strings.
+		- Guarantees that dst string will contain zero-termination.
+		- Guarantees that dst always contains a valid utf8 string.
+*/
+void str_utf8_copy(char *dst, const char *src, int dst_size);
+
+/*
 	Function: str_next_token
 		Writes the next token after str into buf, returns the rest of the string.
 	Parameters:
@@ -1949,13 +2092,42 @@ const char *str_next_token(const char *str, const char *delim, char *buffer, int
 */
 int str_in_list(const char *list, const char *delim, const char *needle);
 
-int pid(void);
+/*
+	Function: pid
+		Returns the pid of the current process.
+	
+	Returns:
+		pid of the current process
+*/
+int pid();
+
+#if defined(CONF_FAMILY_WINDOWS)
+typedef void *PROCESS;
+#else
+typedef pid_t PROCESS;
+#endif
 
 /*
 	Function: shell_execute
 		Executes a given file.
+
+	Returns:
+		handle/pid of the new process
 */
-void shell_execute(const char *file);
+PROCESS shell_execute(const char *file);
+
+/*
+	Function: kill_process
+		Sends kill signal to a process.
+
+	Parameters:
+		process - handle/pid of the process
+
+	Returns:
+		0 - Error
+		1 - Success
+*/
+int kill_process(PROCESS process);
 
 /*
 	Function: os_is_winxp_or_lower
@@ -1965,13 +2137,12 @@ void shell_execute(const char *file);
 		1 - Windows XP or lower.
 		0 - Higher Windows version, Linux, macOS, etc.
 */
-int os_is_winxp_or_lower(void);
+int os_is_winxp_or_lower();
 
 /*
 	Function: generate_password
 		Generates a null-terminated password of length `2 *
 		random_length`.
-
 
 	Parameters:
 		buffer - Pointer to the start of the output buffer.
@@ -1990,7 +2161,7 @@ void generate_password(char *buffer, unsigned length, unsigned short *random, un
 		0 - Initialization succeeded.
 		1 - Initialization failed.
 */
-int secure_random_init(void);
+int secure_random_init();
 
 /*
 	Function: secure_random_password
@@ -2021,9 +2192,19 @@ void secure_random_fill(void *bytes, unsigned length);
 	Function: secure_rand
 		Returns random int (replacement for rand()).
 */
-int secure_rand(void);
+int secure_rand();
 
-#ifdef __cplusplus
+/*
+	Function: secure_rand_below
+		Returns a random nonnegative integer below the given number,
+		with a uniform distribution.
+
+	Parameters:
+		below - Upper limit (exclusive) of integers to return.
+*/
+int secure_rand_below(int below);
+
+#if defined(__cplusplus)
 }
 #endif
 

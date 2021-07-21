@@ -3,16 +3,12 @@
 
 #include <stddef.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 enum
 {
-	SHA256_DIGEST_LENGTH=256/8,
-	SHA256_MAXSTRSIZE=2*SHA256_DIGEST_LENGTH+1,
-	MD5_DIGEST_LENGTH=128/8,
-	MD5_MAXSTRSIZE=2*MD5_DIGEST_LENGTH+1,
+	SHA256_DIGEST_LENGTH = 256 / 8,
+	SHA256_MAXSTRSIZE = 2 * SHA256_DIGEST_LENGTH + 1,
+	MD5_DIGEST_LENGTH = 128 / 8,
+	MD5_MAXSTRSIZE = 2 * MD5_DIGEST_LENGTH + 1,
 };
 
 typedef struct
@@ -38,11 +34,6 @@ int md5_comp(MD5_DIGEST digest1, MD5_DIGEST digest2);
 static const SHA256_DIGEST SHA256_ZEROED = {{0}};
 static const MD5_DIGEST MD5_ZEROED = {{0}};
 
-#ifdef __cplusplus
-}
-#endif
-
-#ifdef __cplusplus
 inline bool operator==(const SHA256_DIGEST &that, const SHA256_DIGEST &other)
 {
 	return sha256_comp(that, other) == 0;
@@ -59,6 +50,5 @@ inline bool operator!=(const MD5_DIGEST &that, const MD5_DIGEST &other)
 {
 	return !(that == other);
 }
-#endif
 
 #endif // BASE_HASH_H

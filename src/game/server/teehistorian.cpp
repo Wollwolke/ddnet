@@ -1,15 +1,15 @@
 #include "teehistorian.h"
 
 #include <engine/shared/config.h>
-#include <engine/shared/snapshot.h>
 #include <engine/shared/json.h>
+#include <engine/shared/snapshot.h>
 #include <game/gamecore.h>
 
 static const char TEEHISTORIAN_NAME[] = "teehistorian@ddnet.tw";
 static const CUuid TEEHISTORIAN_UUID = CalculateUuid(TEEHISTORIAN_NAME);
 static const char TEEHISTORIAN_VERSION[] = "2";
 
-#define UUID(id, name) static const CUuid UUID_ ## id = CalculateUuid(name);
+#define UUID(id, name) static const CUuid UUID_##id = CalculateUuid(name);
 #include <engine/shared/teehistorian_ex_chunks.h>
 #undef UUID
 
@@ -47,11 +47,11 @@ void CTeeHistorian::Reset(const CGameInfo *pGameInfo, WRITE_CALLBACK pfnWriteCal
 	// Tick 0 is implicit at the start, game starts as tick 1.
 	m_TickWritten = true;
 	m_MaxClientID = MAX_CLIENTS;
-	// `m_PrevMaxClientID` is initialized in `BeginTick`
-	for(int i = 0; i < MAX_CLIENTS; i++)
+	// `m_PrevMaxClientID` is initialized in `BeginPlayers`
+	for(auto &PrevPlayer : m_aPrevPlayers)
 	{
-		m_aPrevPlayers[i].m_Alive = false;
-		m_aPrevPlayers[i].m_InputExists = false;
+		PrevPlayer.m_Alive = false;
+		PrevPlayer.m_InputExists = false;
 	}
 	m_pfnWriteCallback = pfnWriteCallback;
 	m_pWriteCallbackUserdata = pUser;
@@ -84,7 +84,7 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 
 	char aJson[2048];
 
-	#define E(buf, str) EscapeJson(buf, sizeof(buf), str)
+#define E(buf, str) EscapeJson(buf, sizeof(buf), str)
 
 	str_format(aJson, sizeof(aJson), "{\"comment\":\"%s\",\"version\":\"%s\",\"game_uuid\":\"%s\",\"server_version\":\"%s\",\"start_time\":\"%s\",\"server_name\":\"%s\",\"server_port\":\"%d\",\"game_type\":\"%s\",\"map_name\":\"%s\",\"map_size\":\"%d\",\"map_sha256\":\"%s\",\"map_crc\":\"%08x\",\"prng_description\":\"%s\",\"config\":{",
 		E(aCommentBuffer, TEEHISTORIAN_NAME),
@@ -106,7 +106,7 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 	char aBuffer2[1024];
 	bool First = true;
 
-	#define MACRO_CONFIG_INT(Name,ScriptName,Def,Min,Max,Flags,Desc) \
+#define MACRO_CONFIG_INT(Name, ScriptName, Def, Min, Max, Flags, Desc) \
 	if((Flags)&CFGFLAG_SERVER && !((Flags)&CFGFLAG_NONTEEHISTORIC) && pGameInfo->m_pConfig->m_##Name != (Def)) \
 	{ \
 		str_format(aJson, sizeof(aJson), "%s\"%s\":\"%d\"", \
@@ -117,9 +117,9 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 		First = false; \
 	}
 
-	#define MACRO_CONFIG_COL(Name,ScriptName,Def,Save,Desc) MACRO_CONFIG_INT(Name,ScriptName,Def,0,0,Save,Desc)
+#define MACRO_CONFIG_COL(Name, ScriptName, Def, Save, Desc) MACRO_CONFIG_INT(Name, ScriptName, Def, 0, 0, Save, Desc)
 
-	#define MACRO_CONFIG_STR(Name,ScriptName,Len,Def,Flags,Desc) \
+#define MACRO_CONFIG_STR(Name, ScriptName, Len, Def, Flags, Desc) \
 	if((Flags)&CFGFLAG_SERVER && !((Flags)&CFGFLAG_NONTEEHISTORIC) && str_comp(pGameInfo->m_pConfig->m_##Name, (Def)) != 0) \
 	{ \
 		str_format(aJson, sizeof(aJson), "%s\"%s\":\"%s\"", \
@@ -130,11 +130,11 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 		First = false; \
 	}
 
-	#include <engine/shared/config_variables.h>
+#include <engine/shared/config_variables.h>
 
-	#undef MACRO_CONFIG_INT
-	#undef MACRO_CONFIG_COL
-	#undef MACRO_CONFIG_STR
+#undef MACRO_CONFIG_INT
+#undef MACRO_CONFIG_COL
+#undef MACRO_CONFIG_STR
 
 	str_format(aJson, sizeof(aJson), "},\"tuning\":{");
 	Write(aJson, str_length(aJson));
@@ -142,7 +142,7 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 	First = true;
 
 	static const float TicksPerSecond = 50.0f;
-	#define MACRO_TUNING_PARAM(Name,ScriptName,Value,Description) \
+#define MACRO_TUNING_PARAM(Name, ScriptName, Value, Description) \
 	if(pGameInfo->m_pTuning->m_##Name.Get() != (int)((Value)*100)) \
 	{ \
 		str_format(aJson, sizeof(aJson), "%s\"%s\":\"%d\"", \
@@ -152,8 +152,8 @@ void CTeeHistorian::WriteHeader(const CGameInfo *pGameInfo)
 		Write(aJson, str_length(aJson)); \
 		First = false; \
 	}
-	#include <game/tuning.h>
-	#undef MACRO_TUNING_PARAM
+#include <game/tuning.h>
+#undef MACRO_TUNING_PARAM
 
 	str_format(aJson, sizeof(aJson), "},\"uuids\":[");
 	Write(aJson, str_length(aJson));
@@ -184,7 +184,6 @@ void CTeeHistorian::WriteExtra(CUuid Uuid, const void *pData, int DataSize)
 	Write(pData, DataSize);
 }
 
-
 void CTeeHistorian::BeginTick(int Tick)
 {
 	dbg_assert(m_State == STATE_START || m_State == STATE_BEFORE_TICK, "invalid teehistorian state");
@@ -205,6 +204,8 @@ void CTeeHistorian::BeginPlayers()
 	dbg_assert(m_State == STATE_BEFORE_PLAYERS, "invalid teehistorian state");
 
 	m_PrevMaxClientID = m_MaxClientID;
+	// ensure that PLAYER_{DIFF, NEW, OLD} don't cause an implicit tick after a TICK_SKIP
+	// by not overwriting m_MaxClientID during RecordPlayer
 	m_MaxClientID = -1;
 
 	m_State = STATE_PLAYERS;
@@ -488,6 +489,78 @@ void CTeeHistorian::RecordTestExtra()
 	}
 
 	WriteExtra(UUID_TEEHISTORIAN_TEST, "", 0);
+}
+
+void CTeeHistorian::RecordTeamSaveSuccess(int Team, CUuid SaveID, const char *pTeamSave)
+{
+	EnsureTickWritten();
+
+	CPacker Buffer;
+	Buffer.Reset();
+	Buffer.AddInt(Team);
+	Buffer.AddRaw(&SaveID, sizeof(SaveID));
+	Buffer.AddString(pTeamSave, 0);
+
+	if(m_Debug)
+	{
+		char aSaveID[UUID_MAXSTRSIZE];
+		FormatUuid(SaveID, aSaveID, sizeof(aSaveID));
+		dbg_msg("teehistorian", "save_success team=%d save_id=%s team_save='%s'", Team, aSaveID, pTeamSave);
+	}
+
+	WriteExtra(UUID_TEEHISTORIAN_SAVE_SUCCESS, Buffer.Data(), Buffer.Size());
+}
+
+void CTeeHistorian::RecordTeamSaveFailure(int Team)
+{
+	EnsureTickWritten();
+
+	CPacker Buffer;
+	Buffer.Reset();
+	Buffer.AddInt(Team);
+
+	if(m_Debug)
+	{
+		dbg_msg("teehistorian", "save_failure team=%d", Team);
+	}
+
+	WriteExtra(UUID_TEEHISTORIAN_SAVE_FAILURE, Buffer.Data(), Buffer.Size());
+}
+
+void CTeeHistorian::RecordTeamLoadSuccess(int Team, CUuid SaveID, const char *pTeamSave)
+{
+	EnsureTickWritten();
+
+	CPacker Buffer;
+	Buffer.Reset();
+	Buffer.AddInt(Team);
+	Buffer.AddRaw(&SaveID, sizeof(SaveID));
+	Buffer.AddString(pTeamSave, 0);
+
+	if(m_Debug)
+	{
+		char aSaveID[UUID_MAXSTRSIZE];
+		FormatUuid(SaveID, aSaveID, sizeof(aSaveID));
+		dbg_msg("teehistorian", "load_success team=%d save_id=%s team_save='%s'", Team, aSaveID, pTeamSave);
+	}
+
+	WriteExtra(UUID_TEEHISTORIAN_LOAD_SUCCESS, Buffer.Data(), Buffer.Size());
+}
+
+void CTeeHistorian::RecordTeamLoadFailure(int Team)
+{
+	EnsureTickWritten();
+
+	CPacker Buffer;
+	Buffer.Reset();
+	Buffer.AddInt(Team);
+
+	if(m_Debug)
+	{
+		dbg_msg("teehistorian", "load_failure team=%d", Team);
+	}
+
+	WriteExtra(UUID_TEEHISTORIAN_LOAD_FAILURE, Buffer.Data(), Buffer.Size());
 }
 
 void CTeeHistorian::EndInputs()

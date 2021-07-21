@@ -3,35 +3,34 @@
 #ifndef ENGINE_CONSOLE_H
 #define ENGINE_CONSOLE_H
 
+#include "kernel.h"
 #include <base/color.h>
 #include <engine/storage.h>
-#include "kernel.h"
 
 class IConsole : public IInterface
 {
 	MACRO_INTERFACE("console", 0)
 public:
-
 	//	TODO: rework/cleanup
 	enum
 	{
-		OUTPUT_LEVEL_STANDARD=0,
+		OUTPUT_LEVEL_STANDARD = 0,
 		OUTPUT_LEVEL_ADDINFO,
 		OUTPUT_LEVEL_DEBUG,
 
-		ACCESS_LEVEL_ADMIN=0,
+		ACCESS_LEVEL_ADMIN = 0,
 		ACCESS_LEVEL_MOD,
 		ACCESS_LEVEL_HELPER,
 		ACCESS_LEVEL_USER,
 
-		TEMPCMD_NAME_LENGTH=32,
-		TEMPCMD_HELP_LENGTH=96,
-		TEMPCMD_PARAMS_LENGTH=96,
+		TEMPCMD_NAME_LENGTH = 32,
+		TEMPCMD_HELP_LENGTH = 96,
+		TEMPCMD_PARAMS_LENGTH = 96,
 
-		MAX_PRINT_CB=4,
+		MAX_PRINT_CB = 4,
 
-		CLIENT_ID_GAME=-2,
-		CLIENT_ID_NO_GAME=-3,
+		CLIENT_ID_GAME = -2,
+		CLIENT_ID_NO_GAME = -3,
 	};
 
 	// TODO: rework this interface to reduce the amount of virtual calls
@@ -39,6 +38,7 @@ public:
 	{
 	protected:
 		unsigned m_NumArgs;
+
 	public:
 		IResult() { m_NumArgs = 0; }
 		virtual ~IResult() {}
@@ -47,6 +47,8 @@ public:
 		virtual float GetFloat(unsigned Index) = 0;
 		virtual const char *GetString(unsigned Index) = 0;
 		virtual ColorHSLA GetColor(unsigned Index, bool Light) = 0;
+
+		virtual void RemoveArgument(unsigned Index) = 0;
 
 		int NumArguments() const { return m_NumArgs; }
 		int m_ClientID;
@@ -60,6 +62,7 @@ public:
 	{
 	protected:
 		int m_AccessLevel;
+
 	public:
 		CCommandInfo() { m_AccessLevel = ACCESS_LEVEL_ADMIN; }
 		virtual ~CCommandInfo() {}
@@ -73,11 +76,12 @@ public:
 	};
 
 	typedef void (*FTeeHistorianCommandCallback)(int ClientID, int FlagMask, const char *pCmd, IResult *pResult, void *pUser);
-	typedef void (*FPrintCallback)(const char *pStr, void *pUser, bool Highlighted);
+	typedef void (*FPrintCallback)(const char *pStr, void *pUser, ColorRGBA PrintColor);
 	typedef void (*FPossibleCallback)(const char *pCmd, void *pUser);
 	typedef void (*FCommandCallback)(IResult *pResult, void *pUserData);
 	typedef void (*FChainCommandCallback)(IResult *pResult, void *pUserData, FCommandCallback pfnCallback, void *pCallbackUserData);
 
+	virtual void Init() = 0;
 	virtual const CCommandInfo *FirstCommandInfo(int AccessLevel, int Flagmask) const = 0;
 	virtual const CCommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) = 0;
 	virtual void PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser) = 0;
@@ -99,7 +103,7 @@ public:
 	virtual int RegisterPrintCallback(int OutputLevel, FPrintCallback pfnPrintCallback, void *pUserData) = 0;
 	virtual void SetPrintOutputLevel(int Index, int OutputLevel) = 0;
 	virtual char *Format(char *pBuf, int Size, const char *pFrom, const char *pStr) = 0;
-	virtual void Print(int Level, const char *pFrom, const char *pStr, bool Highlighted = false) = 0;
+	virtual void Print(int Level, const char *pFrom, const char *pStr, ColorRGBA PrintColor = {1, 1, 1, 1}) = 0;
 	virtual void SetTeeHistorianCommandCallback(FTeeHistorianCommandCallback pfnCallback, void *pUser) = 0;
 
 	virtual void SetAccessLevel(int AccessLevel) = 0;

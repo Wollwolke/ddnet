@@ -3,19 +3,13 @@
 #ifndef GAME_SERVER_EVENTHANDLER_H
 #define GAME_SERVER_EVENTHANDLER_H
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1600
-#include <stdint.h>
-#else
-typedef __int32 int32_t;
-typedef unsigned __int32 uint32_t;
-typedef __int64 int64_t;
-typedef unsigned __int64 uint64_t;
-#endif
-//
+#include <base/system.h>
+#include <base/vmath.h>
+
 class CEventHandler
 {
 	static const int MAX_EVENTS = 128;
-	static const int MAX_DATASIZE = 128*64;
+	static const int MAX_DATASIZE = 128 * 64;
 
 	int m_aTypes[MAX_EVENTS]; // TODO: remove some of these arrays
 	int m_aOffsets[MAX_EVENTS];
@@ -27,6 +21,7 @@ class CEventHandler
 
 	int m_CurrentOffset;
 	int m_NumEvents;
+
 public:
 	CGameContext *GameServer() const { return m_pGameServer; }
 	void SetGameServer(CGameContext *pGameServer);

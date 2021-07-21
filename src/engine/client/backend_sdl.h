@@ -3,33 +3,41 @@
 
 #include "SDL.h"
 
+#include <base/detect.h>
+
+#include "graphics_defines.h"
+
+#include "blocklist_driver.h"
 #include "graphics_threaded.h"
 
-# if defined(CONF_PLATFORM_MACOSX)
-	#include <objc/objc-runtime.h>
+#include <base/tl/threading.h>
 
-	class CAutoreleasePool
+#include <atomic>
+
+#if defined(CONF_PLATFORM_MACOS)
+#include <objc/objc-runtime.h>
+
+class CAutoreleasePool
+{
+private:
+	id m_Pool;
+
+public:
+	CAutoreleasePool()
 	{
-	private:
-		id m_Pool;
+		Class NSAutoreleasePoolClass = (Class)objc_getClass("NSAutoreleasePool");
+		m_Pool = class_createInstance(NSAutoreleasePoolClass, 0);
+		SEL selector = sel_registerName("init");
+		((id(*)(id, SEL))objc_msgSend)(m_Pool, selector);
+	}
 
-	public:
-		CAutoreleasePool()
-		{
-			Class NSAutoreleasePoolClass = (Class) objc_getClass("NSAutoreleasePool");
-			m_Pool = class_createInstance(NSAutoreleasePoolClass, 0);
-			SEL selector = sel_registerName("init");
-			((id (*)(id, SEL))objc_msgSend)(m_Pool, selector);
-		}
-
-		~CAutoreleasePool()
-		{
-			SEL selector = sel_registerName("drain");
-			((id (*)(id, SEL))objc_msgSend)(m_Pool, selector);
-		}
-	};
+	~CAutoreleasePool()
+	{
+		SEL selector = sel_registerName("drain");
+		((id(*)(id, SEL))objc_msgSend)(m_Pool, selector);
+	}
+};
 #endif
-
 
 // basic threaded backend, abstract, missing init and shutdown functions
 class CGraphicsBackend_Threaded : public IGraphicsBackend
@@ -55,10 +63,10 @@ protected:
 
 private:
 	ICommandProcessor *m_pProcessor;
-	CCommandBuffer * volatile m_pBuffer;
+	CCommandBuffer *volatile m_pBuffer;
 	volatile bool m_Shutdown;
-	semaphore m_Activity;
-	semaphore m_BufferDone;
+	CSemaphore m_Activity;
+	CSemaphore m_BufferDone;
 	void *m_pThread;
 
 	static void ThreadFunc(void *pUser);
@@ -69,209 +77,34 @@ class CCommandProcessorFragment_General
 {
 	void Cmd_Nop();
 	void Cmd_Signal(const CCommandBuffer::SCommand_Signal *pCommand);
+
 public:
-	bool RunCommand(const CCommandBuffer::SCommand  *pBaseCommand);
+	bool RunCommand(const CCommandBuffer::SCommand *pBaseCommand);
 };
 
-// takes care of opengl related rendering
-class CCommandProcessorFragment_OpenGL
+enum EBackendType
 {
-	struct CTexture
-	{
-		GLuint m_Tex;
-		int m_MemSize;
-
-		int m_Width;
-		int m_Height;
-		int m_RescaleCount;
-	};
-	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
-	volatile int *m_pTextureMemoryUsage;
-
-	GLint m_MaxTexSize;
-public:
-	enum
-	{
-		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_OPENGL,
-	};
-
-	struct SCommand_Init : public CCommandBuffer::SCommand
-	{
-		SCommand_Init() : SCommand(CMD_INIT) {}
-		volatile int *m_pTextureMemoryUsage;
-	};
-
-private:
-	static int TexFormatToOpenGLFormat(int TexFormat);
-	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
-	static void *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
-
-	void SetState(const CCommandBuffer::SState &State);
-
-	void Cmd_Init(const SCommand_Init *pCommand);
-	void Cmd_Texture_Update(const CCommandBuffer::SCommand_Texture_Update *pCommand);
-	void Cmd_Texture_Destroy(const CCommandBuffer::SCommand_Texture_Destroy *pCommand);
-	void Cmd_Texture_Create(const CCommandBuffer::SCommand_Texture_Create *pCommand);
-	void Cmd_Clear(const CCommandBuffer::SCommand_Clear *pCommand);
-	void Cmd_Render(const CCommandBuffer::SCommand_Render *pCommand);
-	void Cmd_Screenshot(const CCommandBuffer::SCommand_Screenshot *pCommand);
-
-public:
-	CCommandProcessorFragment_OpenGL();
-
-	bool RunCommand(const CCommandBuffer::SCommand  *pBaseCommand);
+	BACKEND_TYPE_OPENGL = 0,
+	BACKEND_TYPE_OPENGL_ES,
 };
 
-
-#define MAX_STREAM_BUFFER_COUNT 30
-
-class CGLSLProgram;
-class CGLSLTWProgram;
-class CGLSLPrimitiveProgram;
-class CGLSLQuadProgram;
-class CGLSLTileProgram;
-class CGLSLBorderTileProgram;
-class CGLSLBorderTileLineProgram;
-class CGLSLTextProgram;
-class CGLSLSpriteProgram;
-class CGLSLSpriteMultipleProgram;
-// takes care of opengl 3.3 related rendering
-class CCommandProcessorFragment_OpenGL3_3
+struct SBackendCapabilites
 {
-	bool m_UseMultipleTextureUnits;
-	bool m_UsePreinitializedVertexBuffer;
-	
-	struct CTexture
-	{
-		GLuint m_Tex;
-		GLuint m_Sampler;
-		int m_LastWrapMode;
-		int m_MemSize;
+	bool m_TileBuffering;
+	bool m_QuadBuffering;
+	bool m_TextBuffering;
+	bool m_QuadContainerBuffering;
 
-		int m_Width;
-		int m_Height;
+	bool m_MipMapping;
+	bool m_NPOTTextures;
+	bool m_3DTextures;
+	bool m_2DArrayTextures;
+	bool m_2DArrayTexturesAsExtension;
+	bool m_ShaderSupport;
 
-		int m_RescaleCount;
-	};
-	CTexture m_aTextures[CCommandBuffer::MAX_TEXTURES];
-	volatile int *m_pTextureMemoryUsage;
-
-	CGLSLPrimitiveProgram *m_pPrimitiveProgram;
-	CGLSLTileProgram *m_pTileProgram;
-	CGLSLTileProgram *m_pTileProgramTextured;
-	CGLSLBorderTileProgram *m_pBorderTileProgram;
-	CGLSLBorderTileProgram *m_pBorderTileProgramTextured;
-	CGLSLBorderTileLineProgram *m_pBorderTileLineProgram;
-	CGLSLBorderTileLineProgram *m_pBorderTileLineProgramTextured;
-	CGLSLQuadProgram *m_pQuadProgram;
-	CGLSLQuadProgram *m_pQuadProgramTextured;
-	CGLSLTextProgram *m_pTextProgram;
-	CGLSLSpriteProgram *m_pSpriteProgram;
-	CGLSLSpriteMultipleProgram *m_pSpriteProgramMultiple;
-
-	GLuint m_LastProgramID;
-
-	GLuint m_PrimitiveDrawVertexID[MAX_STREAM_BUFFER_COUNT];
-	GLuint m_PrimitiveDrawBufferID[MAX_STREAM_BUFFER_COUNT];
-
-	GLuint m_LastIndexBufferBound[MAX_STREAM_BUFFER_COUNT];
-
-	int m_LastStreamBuffer;
-	
-	GLuint m_QuadDrawIndexBufferID;
-	unsigned int m_CurrentIndicesInBuffer;
-	
-	GLint m_MaxTextureUnits;
-	GLint m_MaxTexSize;
-	
-	int m_LastBlendMode; //avoid all possible opengl state changes
-	bool m_LastClipEnable;
-	
-	struct STextureBound{
-		int m_TextureSlot;
-	};
-	std::vector<STextureBound> m_TextureSlotBoundToUnit; //the texture index generated by loadtextureraw is stored in an index calculated by max texture units
-	
-	bool IsAndUpdateTextureSlotBound(int IDX, int Slot);
-	void DestroyTexture(int Slot);
-	void DestroyBufferContainer(int Index, bool DeleteBOs = true);
-	
-	void AppendIndices(unsigned int NewIndicesCount);
-	
-	struct SBufferContainer
-	{
-		SBufferContainer() : m_VertArrayID(0), m_LastIndexBufferBound(0) {}
-		GLuint m_VertArrayID;
-		GLuint m_LastIndexBufferBound;
-		SBufferContainerInfo m_ContainerInfo;
-	};
-	std::vector<SBufferContainer> m_BufferContainers;
-
-	std::vector<GLuint> m_BufferObjectIndices;
-	
-	CCommandBuffer::SColorf m_ClearColor;
-public:
-	enum
-	{
-		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_OPENGL3_3,
-		CMD_SHUTDOWN,
-	};
-
-	struct SCommand_Init : public CCommandBuffer::SCommand
-	{
-		SCommand_Init() : SCommand(CMD_INIT) {}
-		class IStorage *m_pStorage;
-		volatile int *m_pTextureMemoryUsage;
-	};
-
-	struct SCommand_Shutdown : public CCommandBuffer::SCommand
-	{
-		SCommand_Shutdown() : SCommand(CMD_SHUTDOWN) {}
-	};
-
-private:
-	static int TexFormatToOpenGLFormat(int TexFormat);
-	static unsigned char Sample(int w, int h, const unsigned char *pData, int u, int v, int Offset, int ScaleW, int ScaleH, int Bpp);
-	static void *Rescale(int Width, int Height, int NewWidth, int NewHeight, int Format, const unsigned char *pData);
-	
-	void SetState(const CCommandBuffer::SState &State, CGLSLTWProgram *pProgram);
-	void UseProgram(CGLSLTWProgram *pProgram);
-	void UploadStreamBufferData(unsigned int PrimitiveType, const void* pVertices, unsigned int PrimitiveCount);
-	void RenderText(const CCommandBuffer::SState& State, int DrawNum, int TextTextureIndex, int TextOutlineTextureIndex, int TextureSize, const float* pTextColor, const float* pTextOutlineColor);
-
-	void Cmd_Init(const SCommand_Init *pCommand);
-	void Cmd_Shutdown(const SCommand_Shutdown *pCommand);
-	void Cmd_Texture_Update(const CCommandBuffer::SCommand_Texture_Update *pCommand);
-	void Cmd_Texture_Destroy(const CCommandBuffer::SCommand_Texture_Destroy *pCommand);
-	void Cmd_Texture_Create(const CCommandBuffer::SCommand_Texture_Create *pCommand);
-	void Cmd_Clear(const CCommandBuffer::SCommand_Clear *pCommand);
-	void Cmd_Render(const CCommandBuffer::SCommand_Render *pCommand);
-	void Cmd_Screenshot(const CCommandBuffer::SCommand_Screenshot *pCommand);
-
-	void Cmd_CreateBufferObject(const CCommandBuffer::SCommand_CreateBufferObject *pCommand);
-	void Cmd_RecreateBufferObject(const CCommandBuffer::SCommand_RecreateBufferObject *pCommand);
-	void Cmd_UpdateBufferObject(const CCommandBuffer::SCommand_UpdateBufferObject *pCommand);
-	void Cmd_CopyBufferObject(const CCommandBuffer::SCommand_CopyBufferObject *pCommand);
-	void Cmd_DeleteBufferObject(const CCommandBuffer::SCommand_DeleteBufferObject *pCommand);
-
-	void Cmd_CreateBufferContainer(const CCommandBuffer::SCommand_CreateBufferContainer *pCommand);
-	void Cmd_UpdateBufferContainer(const CCommandBuffer::SCommand_UpdateBufferContainer *pCommand);
-	void Cmd_DeleteBufferContainer(const CCommandBuffer::SCommand_DeleteBufferContainer *pCommand);
-	void Cmd_IndicesRequiredNumNotify(const CCommandBuffer::SCommand_IndicesRequiredNumNotify *pCommand);
-		
-	void Cmd_RenderTileLayer(const CCommandBuffer::SCommand_RenderTileLayer *pCommand);	
-	void Cmd_RenderBorderTile(const CCommandBuffer::SCommand_RenderBorderTile *pCommand);
-	void Cmd_RenderBorderTileLine(const CCommandBuffer::SCommand_RenderBorderTileLine *pCommand);
-	void Cmd_RenderQuadLayer(const CCommandBuffer::SCommand_RenderQuadLayer *pCommand);
-	void Cmd_RenderText(const CCommandBuffer::SCommand_RenderText *pCommand);
-	void Cmd_RenderTextStream(const CCommandBuffer::SCommand_RenderTextStream *pCommand);
-	void Cmd_RenderQuadContainer(const CCommandBuffer::SCommand_RenderQuadContainer *pCommand);
-	void Cmd_RenderQuadContainerAsSprite(const CCommandBuffer::SCommand_RenderQuadContainerAsSprite *pCommand);
-	void Cmd_RenderQuadContainerAsSpriteMultiple(const CCommandBuffer::SCommand_RenderQuadContainerAsSpriteMultiple *pCommand);
-public:
-	CCommandProcessorFragment_OpenGL3_3();
-
-	bool RunCommand(const CCommandBuffer::SCommand  *pBaseCommand);
+	int m_ContextMajor;
+	int m_ContextMinor;
+	int m_ContextPatch;
 };
 
 // takes care of sdl related commands
@@ -280,62 +113,102 @@ class CCommandProcessorFragment_SDL
 	// SDL stuff
 	SDL_Window *m_pWindow;
 	SDL_GLContext m_GLContext;
+
 public:
 	enum
 	{
 		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_SDL,
-		CMD_UPDATE_VIEWPORT,
 		CMD_SHUTDOWN,
 	};
 
 	struct SCommand_Init : public CCommandBuffer::SCommand
 	{
-		SCommand_Init() : SCommand(CMD_INIT) {}
+		SCommand_Init() :
+			SCommand(CMD_INIT) {}
 		SDL_Window *m_pWindow;
 		SDL_GLContext m_GLContext;
 	};
 
-	struct SCommand_Update_Viewport : public CCommandBuffer::SCommand
-	{
-		SCommand_Update_Viewport() : SCommand(CMD_UPDATE_VIEWPORT) {}
-		int m_X;
-		int m_Y;
-		int m_Width;
-		int m_Height;
-	};
-
 	struct SCommand_Shutdown : public CCommandBuffer::SCommand
 	{
-		SCommand_Shutdown() : SCommand(CMD_SHUTDOWN) {}
+		SCommand_Shutdown() :
+			SCommand(CMD_SHUTDOWN) {}
 	};
 
 private:
 	void Cmd_Init(const SCommand_Init *pCommand);
-	void Cmd_Update_Viewport(const SCommand_Update_Viewport *pCommand);
 	void Cmd_Shutdown(const SCommand_Shutdown *pCommand);
 	void Cmd_Swap(const CCommandBuffer::SCommand_Swap *pCommand);
 	void Cmd_VSync(const CCommandBuffer::SCommand_VSync *pCommand);
-	void Cmd_Resize(const CCommandBuffer::SCommand_Resize *pCommand);
 	void Cmd_VideoModes(const CCommandBuffer::SCommand_VideoModes *pCommand);
+
 public:
 	CCommandProcessorFragment_SDL();
 
 	bool RunCommand(const CCommandBuffer::SCommand *pBaseCommand);
 };
 
+class CCommandProcessorFragment_OpenGLBase
+{
+public:
+	virtual ~CCommandProcessorFragment_OpenGLBase() = default;
+	virtual bool RunCommand(const CCommandBuffer::SCommand *pBaseCommand) = 0;
+
+	enum
+	{
+		CMD_INIT = CCommandBuffer::CMDGROUP_PLATFORM_OPENGL,
+		CMD_SHUTDOWN = CMD_INIT + 1,
+	};
+
+	struct SCommand_Init : public CCommandBuffer::SCommand
+	{
+		SCommand_Init() :
+			SCommand(CMD_INIT) {}
+		class IStorage *m_pStorage;
+		std::atomic<int> *m_pTextureMemoryUsage;
+		SBackendCapabilites *m_pCapabilities;
+		int *m_pInitError;
+
+		const char **m_pErrStringPtr;
+
+		char *m_pVendorString;
+		char *m_pVersionString;
+		char *m_pRendererString;
+
+		int m_RequestedMajor;
+		int m_RequestedMinor;
+		int m_RequestedPatch;
+
+		EBackendType m_RequestedBackend;
+
+		int m_GlewMajor;
+		int m_GlewMinor;
+		int m_GlewPatch;
+	};
+
+	struct SCommand_Shutdown : public CCommandBuffer::SCommand
+	{
+		SCommand_Shutdown() :
+			SCommand(CMD_SHUTDOWN) {}
+	};
+};
+
 // command processor impelementation, uses the fragments to combine into one processor
 class CCommandProcessor_SDL_OpenGL : public CGraphicsBackend_Threaded::ICommandProcessor
 {
-	CCommandProcessorFragment_OpenGL m_OpenGL;
-	CCommandProcessorFragment_OpenGL3_3 m_OpenGL3_3;
+	CCommandProcessorFragment_OpenGLBase *m_pOpenGL;
 	CCommandProcessorFragment_SDL m_SDL;
 	CCommandProcessorFragment_General m_General;
-	
-	bool m_UseOpenGL3_3;
+
+	EBackendType m_BackendType;
+
 public:
-	void UseOpenGL3_3(bool Use) { m_UseOpenGL3_3 = Use; }
+	CCommandProcessor_SDL_OpenGL(EBackendType BackendType, int OpenGLMajor, int OpenGLMinor, int OpenGLPatch);
+	virtual ~CCommandProcessor_SDL_OpenGL();
 	virtual void RunBuffer(CCommandBuffer *pBuffer);
 };
+
+static constexpr size_t gs_GPUInfoStringSize = 256;
 
 // graphics backend implemented with SDL and OpenGL
 class CGraphicsBackend_SDL_OpenGL : public CGraphicsBackend_Threaded
@@ -343,10 +216,23 @@ class CGraphicsBackend_SDL_OpenGL : public CGraphicsBackend_Threaded
 	SDL_Window *m_pWindow;
 	SDL_GLContext m_GLContext;
 	ICommandProcessor *m_pProcessor;
-	volatile int m_TextureMemoryUsage;
+	std::atomic<int> m_TextureMemoryUsage;
 	int m_NumScreens;
-	
-	bool m_UseOpenGL3_3;
+
+	SBackendCapabilites m_Capabilites;
+
+	char m_aVendorString[gs_GPUInfoStringSize] = {};
+	char m_aVersionString[gs_GPUInfoStringSize] = {};
+	char m_aRendererString[gs_GPUInfoStringSize] = {};
+
+	bool m_UseNewOpenGL;
+	EBackendType m_BackendType;
+
+	char m_aErrorString[256];
+
+	static EBackendType DetectBackend();
+	static void ClampDriverVersion(EBackendType BackendType);
+
 public:
 	virtual int Init(const char *pName, int *Screen, int *pWidth, int *pHeight, int FsaaSamples, int Flags, int *pDesktopWidth, int *pDesktopHeight, int *pCurrentWidth, int *pCurrentHeight, class IStorage *pStorage);
 	virtual int Shutdown();
@@ -357,16 +243,49 @@ public:
 
 	virtual void Minimize();
 	virtual void Maximize();
-	virtual bool Fullscreen(bool State);
-	virtual void SetWindowBordered(bool State);	// on=true/off=false
+	virtual void SetWindowParams(int FullscreenMode, bool IsBorderless);
 	virtual bool SetWindowScreen(int Index);
 	virtual int GetWindowScreen();
 	virtual int WindowActive();
 	virtual int WindowOpen();
 	virtual void SetWindowGrab(bool Grab);
+	virtual void ResizeWindow(int w, int h);
+	virtual void GetViewportSize(int &w, int &h);
 	virtual void NotifyWindow();
-	
-	virtual bool IsOpenGL3_3() { return m_UseOpenGL3_3; }
+
+	virtual void GetDriverVersion(EGraphicsDriverAgeType DriverAgeType, int &Major, int &Minor, int &Patch);
+	virtual bool IsConfigModernAPI() { return IsModernAPI(m_BackendType); }
+	virtual bool IsNewOpenGL() { return m_UseNewOpenGL; }
+	virtual bool HasTileBuffering() { return m_Capabilites.m_TileBuffering; }
+	virtual bool HasQuadBuffering() { return m_Capabilites.m_QuadBuffering; }
+	virtual bool HasTextBuffering() { return m_Capabilites.m_TextBuffering; }
+	virtual bool HasQuadContainerBuffering() { return m_Capabilites.m_QuadContainerBuffering; }
+	virtual bool Has2DTextureArrays() { return m_Capabilites.m_2DArrayTextures; }
+
+	virtual const char *GetErrorString()
+	{
+		if(m_aErrorString[0] != '\0')
+			return m_aErrorString;
+
+		return NULL;
+	}
+
+	virtual const char *GetVendorString()
+	{
+		return m_aVendorString;
+	}
+
+	virtual const char *GetVersionString()
+	{
+		return m_aVersionString;
+	}
+
+	virtual const char *GetRendererString()
+	{
+		return m_aRendererString;
+	}
+
+	static bool IsModernAPI(EBackendType BackendType);
 };
 
 #endif // ENGINE_CLIENT_BACKEND_SDL_H

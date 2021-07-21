@@ -1,6 +1,6 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <stdio.h>	// sscanf
+#include <stdio.h> // sscanf
 
 #include <base/system.h>
 
@@ -97,12 +97,12 @@ public:
 		}
 	}
 
-	virtual int IsRefreshing()
+	virtual bool IsRefreshing() const
 	{
 		return m_State != STATE_READY;
 	}
 
-	virtual NETADDR GetAddr(int Index)
+	virtual NETADDR GetAddr(int Index) const
 	{
 		return m_aMasterServers[Index].m_Addr;
 	}
@@ -112,17 +112,17 @@ public:
 		m_aMasterServers[Index].m_Count = Count;
 	}
 
-	virtual int GetCount(int Index)
+	virtual int GetCount(int Index) const
 	{
 		return m_aMasterServers[Index].m_Count;
 	}
 
-	virtual const char *GetName(int Index)
+	virtual const char *GetName(int Index) const
 	{
 		return m_aMasterServers[Index].m_aHostname;
 	}
 
-	virtual bool IsValid(int Index)
+	virtual bool IsValid(int Index) const
 	{
 		return m_aMasterServers[Index].m_Valid;
 	}
@@ -138,7 +138,7 @@ public:
 		mem_zero(m_aMasterServers, sizeof(m_aMasterServers));
 		for(int i = 0; i < MAX_MASTERSERVERS; i++)
 		{
-			str_format(m_aMasterServers[i].m_aHostname, sizeof(m_aMasterServers[i].m_aHostname), "master%d.teeworlds.com", i+1);
+			str_format(m_aMasterServers[i].m_aHostname, sizeof(m_aMasterServers[i].m_aHostname), "master%d.teeworlds.com", i + 1);
 			m_apLookup[i] = std::make_shared<CHostLookup>();
 		}
 	}
@@ -168,11 +168,11 @@ public:
 			{
 				Info.m_Addr.port = 8300;
 				bool Added = false;
-				for(int i = 0; i < MAX_MASTERSERVERS; ++i)
+				for(auto &MasterServer : m_aMasterServers)
 				{
-					if(str_comp(m_aMasterServers[i].m_aHostname, Info.m_aHostname) == 0)
+					if(str_comp(MasterServer.m_aHostname, Info.m_aHostname) == 0)
 					{
-						m_aMasterServers[i] = Info;
+						MasterServer = Info;
 						Added = true;
 						break;
 					}
@@ -180,11 +180,11 @@ public:
 
 				if(!Added)
 				{
-					for(int i = 0; i < MAX_MASTERSERVERS; ++i)
+					for(auto &MasterServer : m_aMasterServers)
 					{
-						if(m_aMasterServers[i].m_Addr.type == NETTYPE_INVALID)
+						if(MasterServer.m_Addr.type == NETTYPE_INVALID)
 						{
-							m_aMasterServers[i] = Info;
+							MasterServer = Info;
 							Added = true;
 							break;
 						}
@@ -210,15 +210,15 @@ public:
 		if(!File)
 			return -1;
 
-		for(int i = 0; i < MAX_MASTERSERVERS; i++)
+		for(auto &MasterServer : m_aMasterServers)
 		{
 			char aAddrStr[NETADDR_MAXSTRSIZE];
-			if(m_aMasterServers[i].m_Addr.type != NETTYPE_INVALID)
-				net_addr_str(&m_aMasterServers[i].m_Addr, aAddrStr, sizeof(aAddrStr), true);
+			if(MasterServer.m_Addr.type != NETTYPE_INVALID)
+				net_addr_str(&MasterServer.m_Addr, aAddrStr, sizeof(aAddrStr), true);
 			else
 				aAddrStr[0] = 0;
 			char aBuf[256];
-			str_format(aBuf, sizeof(aBuf), "%s %s", m_aMasterServers[i].m_aHostname, aAddrStr);
+			str_format(aBuf, sizeof(aBuf), "%s %s", MasterServer.m_aHostname, aAddrStr);
 			io_write(File, aBuf, str_length(aBuf));
 			io_write_newline(File);
 		}
