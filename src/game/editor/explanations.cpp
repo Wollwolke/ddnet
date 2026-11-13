@@ -1,7 +1,78 @@
-#include "editor.h"
+#include "explanations.h"
 
-// Explanations by Lady Saavik
-const char *CEditor::Explain(int Tile, int Layer)
+#include <base/dbg.h>
+
+#include <game/mapitems.h>
+
+// DDNet entity explanations by Lady Saavik
+// TODO: Add other entities' tiles' explanations and improve new ones
+
+// Tile Numbers For Explanations - TODO: Add/Improve tiles and explanations
+enum
+{
+	TILE_PUB_AIR = 0,
+	TILE_PUB_HOOKABLE = 1,
+	TILE_PUB_DEATH = 2,
+	TILE_PUB_UNHOOKABLE = 3,
+
+	TILE_PUB_CREDITS1 = 140,
+	TILE_PUB_CREDITS2 = 141,
+	TILE_PUB_CREDITS3 = 142,
+	TILE_PUB_CREDITS4 = 143,
+	TILE_PUB_CREDITS5 = 156,
+	TILE_PUB_CREDITS6 = 157,
+	TILE_PUB_CREDITS7 = 158,
+	TILE_PUB_CREDITS8 = 159,
+
+	TILE_PUB_ENTITIES_OFF1 = 190,
+	TILE_PUB_ENTITIES_OFF2 = 191,
+};
+
+enum
+{
+	TILE_FNG_SPIKE_GOLD = 7,
+	TILE_FNG_SPIKE_NORMAL = 8,
+	TILE_FNG_SPIKE_RED = 9,
+	TILE_FNG_SPIKE_BLUE = 10,
+	TILE_FNG_SCORE_RED = 11,
+	TILE_FNG_SCORE_BLUE = 12,
+
+	TILE_FNG_SPIKE_GREEN = 14,
+	TILE_FNG_SPIKE_PURPLE = 15,
+
+	TILE_FNG_SPAWN = 192,
+	TILE_FNG_SPAWN_RED = 193,
+	TILE_FNG_SPAWN_BLUE = 194,
+	TILE_FNG_FLAG_RED = 195,
+	TILE_FNG_FLAG_BLUE = 196,
+	TILE_FNG_SHIELD = 197,
+	TILE_FNG_HEART = 198,
+	TILE_FNG_SHOTGUN = 199,
+	TILE_FNG_GRENADE = 200,
+	TILE_FNG_NINJA = 201,
+	TILE_FNG_LASER = 202,
+
+	TILE_FNG_SPIKE_OLD1 = 208,
+	TILE_FNG_SPIKE_OLD2 = 209,
+	TILE_FNG_SPIKE_OLD3 = 210,
+};
+
+enum
+{
+	TILE_VANILLA_SPAWN = 192,
+	TILE_VANILLA_SPAWN_RED = 193,
+	TILE_VANILLA_SPAWN_BLUE = 194,
+	TILE_VANILLA_FLAG_RED = 195,
+	TILE_VANILLA_FLAG_BLUE = 196,
+	TILE_VANILLA_SHIELD = 197,
+	TILE_VANILLA_HEART = 198,
+	TILE_VANILLA_SHOTGUN = 199,
+	TILE_VANILLA_GRENADE = 200,
+	TILE_VANILLA_NINJA = 201,
+	TILE_VANILLA_LASER = 202,
+};
+
+const char *CExplanations::ExplainDDNet(int Tile, int Layer)
 {
 	switch(Tile)
 	{
@@ -12,7 +83,7 @@ const char *CEditor::Explain(int Tile, int Layer)
 			return "HOOKABLE: It's possible to hook and collide with it.";
 		break;
 	case TILE_DEATH:
-		if(Layer == LAYER_GAME)
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "KILL: Kills the tee.";
 		break;
 	case TILE_NOHOOK:
@@ -21,7 +92,7 @@ const char *CEditor::Explain(int Tile, int Layer)
 		break;
 	case TILE_NOLASER:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
-			return "LASER BLOCKER: Doesn't let DRAGGIN & SPINNING LASER and PLASMA TURRET reach tees through it.";
+			return "LASER BLOCKER: Doesn't let DRAGGING & SPINNING LASER and PLASMA TURRET reach tees through it.";
 		break;
 	case TILE_THROUGH_CUT:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
@@ -65,6 +136,14 @@ const char *CEditor::Explain(int Tile, int Layer)
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
 			return "UNDEEP: Removes DEEP FREEZE effect.";
 		break;
+	case TILE_LFREEZE:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "LIVE FREEZE: Live frozen tees cannot move or jump, while hook and weapons can still be used.";
+		break;
+	case TILE_LUNFREEZE:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "LIVE UNFREEZE: Removes LIVE FREEZE effect.";
+		break;
 	case TILE_TELEINWEAPON:
 		if(Layer == LAYER_TELE)
 			return "WEAPON TELEPORT: Teleports bullets shot into it to TELEPORT TO, where it comes out. Direction, angle and length are kept.";
@@ -77,31 +156,31 @@ const char *CEditor::Explain(int Tile, int Layer)
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "WALLJUMP: Placed next to a wall. Enables climbing up the wall.";
 		break;
-	case TILE_EHOOK_START:
+	case TILE_EHOOK_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "ENDLESS HOOK: Activates endless hook.";
 		break;
-	case TILE_EHOOK_END:
+	case TILE_EHOOK_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "ENDLESS HOOK OFF: Deactivates endless hook.";
 		break;
-	case TILE_HIT_START:
+	case TILE_HIT_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "HIT OTHERS: You can hit others.";
 		if(Layer == LAYER_SWITCH)
 			return "HIT OTHERS: You can activate hitting others for single weapons, using delay number to select which.";
 		break;
-	case TILE_HIT_END:
+	case TILE_HIT_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "HIT OTHERS: You can't hit others.";
 		if(Layer == LAYER_SWITCH)
 			return "HIT OTHERS: You can deactivate hitting others for single weapons, using delay number to select which.";
 		break;
-	case TILE_SOLO_START:
+	case TILE_SOLO_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "SOLO: You are now in a solo part.";
 		break;
-	case TILE_SOLO_END: // also TILE_SWITCHTIMEDOPEN
+	case TILE_SOLO_DISABLE: // also TILE_SWITCHTIMEDOPEN
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "SOLO: You are now out of the solo part.";
 		if(Layer == LAYER_SWITCH)
@@ -127,13 +206,15 @@ const char *CEditor::Explain(int Tile, int Layer)
 		if(Layer == LAYER_TELE)
 			return "TELEPORT TO: Destination tile for FROMs, WEAPON & HOOK TELEPORTs with the same numbers.";
 		break;
-	case TILE_BOOST:
+	case TILE_SPEED_BOOST_OLD:
 		if(Layer == LAYER_SPEEDUP)
-			return "SPEEDUP: Gives tee defined speed. Arrow shows direction and angle.";
+			return "OLD SPEEDUP: Gives tee defined speed. Arrow shows direction and angle. Deprecated.";
 		break;
-	case TILE_TELECHECK:
+	case TILE_TELECHECK: // also TILE_SPEED_BOOST
 		if(Layer == LAYER_TELE)
 			return "CHECKPOINT TELEPORT: After having touched this tile, any CFRM will teleport you to CTO with the same number.";
+		if(Layer == LAYER_SPEEDUP)
+			return "SPEEDUP: Gives tee defined speed. Arrow shows direction and angle.";
 		break;
 	case TILE_TELECHECKOUT:
 		if(Layer == LAYER_TELE)
@@ -147,11 +228,11 @@ const char *CEditor::Explain(int Tile, int Layer)
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "REFILL JUMPS: Restores all jumps.";
 		break;
-	case TILE_BEGIN:
+	case TILE_START:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "START: Starts counting your race time.";
 		break;
-	case TILE_END:
+	case TILE_FINISH:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "FINISH: End of race.";
 		break;
@@ -173,13 +254,13 @@ const char *CEditor::Explain(int Tile, int Layer)
 		break;
 	case TILE_CP:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
-			return "SPEEDER: Causes weapons, SHIELD, HEART and SPINNING LASER to move slowly.";
+			return "SPEEDER: Causes weapons, SHIELD, SNOWFLAKE and SPINNING LASER to move slowly.";
 		break;
 	case TILE_CP_F:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
-			return "SPEEDER: Causes weapons, SHIELD, HEART and SPINNING LASER to move quickly.";
+			return "SPEEDER: Causes weapons, SHIELD, SNOWFLAKE and SPINNING LASER to move quickly.";
 		break;
-	case TILE_TUNE1:
+	case TILE_TUNE:
 		if(Layer == LAYER_TUNE)
 			return "TUNE ZONE: Area where defined tunes work.";
 		break;
@@ -207,43 +288,43 @@ const char *CEditor::Explain(int Tile, int Layer)
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "UNLOCK TEAM: Forces team to be unlocked so that team doesn't get killed when one dies.";
 		break;
-	case TILE_PENALTY:
+	case TILE_ADD_TIME:
 		if(Layer == LAYER_SWITCH)
 			return "PENALTY: Adds time to your current race time. Opposite of BONUS.";
 		break;
-	case TILE_NPC_END:
+	case TILE_NPC_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "COLLISION OFF: You can't collide with others.";
 		break;
-	case TILE_SUPER_END:
+	case TILE_UNLIMITED_JUMPS_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "SUPER JUMP OFF: You don't have unlimited air jumps.";
 		break;
-	case TILE_JETPACK_END:
+	case TILE_JETPACK_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "JETPACK OFF: You lose your jetpack gun.";
 		break;
-	case TILE_NPH_END:
+	case TILE_NPH_DISABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "HOOK OTHERS OFF: You can't hook others.";
 		break;
-	case TILE_BONUS:
+	case TILE_SUBTRACT_TIME:
 		if(Layer == LAYER_SWITCH)
 			return "BONUS: Subtracts time from your current race time. Opposite of PENALTY.";
 		break;
-	case TILE_NPC_START:
+	case TILE_NPC_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "COLLISION: You can collide with others.";
 		break;
-	case TILE_SUPER_START:
+	case TILE_UNLIMITED_JUMPS_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "SUPER JUMP: You have unlimited air jumps.";
 		break;
-	case TILE_JETPACK_START:
+	case TILE_JETPACK_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "JETPACK: You have a jetpack gun.";
 		break;
-	case TILE_NPH_START:
+	case TILE_NPH_ENABLE:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT)
 			return "HOOK OTHERS: You can hook others.";
 		break;
@@ -286,7 +367,7 @@ const char *CEditor::Explain(int Tile, int Layer)
 		break;
 	case ENTITY_OFFSET + ENTITY_HEALTH_1:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
-			return "HEART: Works like a FREEZE tile. Freezes tees for 3 seconds by default.";
+			return "SNOWFLAKE: Works like a FREEZE tile. Freezes tees for 3 seconds by default.";
 		break;
 	case ENTITY_OFFSET + ENTITY_WEAPON_SHOTGUN:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
@@ -390,7 +471,23 @@ const char *CEditor::Explain(int Tile, int Layer)
 		break;
 	case ENTITY_OFFSET + ENTITY_CRAZY_SHOTGUN:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
-			return "EXPLODING BULLET: Bounces off the walls without explosion. Touching the bullet works like FREEZE tile (freezes for 3 seconds by default).";
+			return "BULLET: Bounces off the walls without explosion. Touching the bullet works like FREEZE tile (freezes for 3 seconds by default).";
+		break;
+	case ENTITY_OFFSET + ENTITY_ARMOR_SHOTGUN:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "SHOTGUN SHIELD: Takes shotgun away.";
+		break;
+	case ENTITY_OFFSET + ENTITY_ARMOR_GRENADE:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "GRENADE SHIELD: Takes grenade away.";
+		break;
+	case ENTITY_OFFSET + ENTITY_ARMOR_NINJA:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "NINJA SHIELD: Takes ninja away.";
+		break;
+	case ENTITY_OFFSET + ENTITY_ARMOR_LASER:
+		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
+			return "LASER SHIELD: Takes laser away.";
 		break;
 	case ENTITY_OFFSET + ENTITY_DRAGGER_WEAK:
 		if(Layer == LAYER_GAME || Layer == LAYER_FRONT || Layer == LAYER_SWITCH)
@@ -457,7 +554,205 @@ const char *CEditor::Explain(int Tile, int Layer)
 			return "TELELASER OFF: Turn laser off as telegun weapon.";
 		break;
 	}
-	if(Tile >= TILE_CHECKPOINT_FIRST && Tile <= TILE_CHECKPOINT_LAST && (Layer == LAYER_GAME || Layer == LAYER_FRONT))
+	if(Tile >= TILE_TIME_CHECKPOINT_FIRST && Tile <= TILE_TIME_CHECKPOINT_LAST && (Layer == LAYER_GAME || Layer == LAYER_FRONT))
 		return "TIME CHECKPOINT: Compares your current race time with your record to show you whether you are running faster or slower.";
-	return "";
+	return nullptr;
+}
+
+const char *CExplanations::ExplainFNG(int Tile, int Layer)
+{
+	switch(Tile)
+	{
+	case TILE_PUB_AIR:
+		return "EMPTY: Can be used as an eraser.";
+	case TILE_PUB_HOOKABLE:
+		if(Layer == LAYER_GAME)
+			return "HOOKABLE: It's possible to hook and collide with it.";
+		break;
+	case TILE_PUB_DEATH:
+		if(Layer == LAYER_GAME)
+			return "DEATH: Kills the tee.";
+		break;
+	case TILE_PUB_UNHOOKABLE:
+		if(Layer == LAYER_GAME)
+			return "UNHOOKABLE: It's not possible to hook it, but can collide with it.";
+		break;
+	case TILE_FNG_SPIKE_GOLD:
+		if(Layer == LAYER_GAME)
+			return "GOLDEN SPIKE: Kills the tee and gives points to the killer. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SPIKE_NORMAL:
+		if(Layer == LAYER_GAME)
+			return "NORMAL SPIKE: Kills the tee and gives points to the killer. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SPIKE_RED:
+		if(Layer == LAYER_GAME)
+			return "RED SPIKE: Red team spikes. Gives negative points when killer is in blue team. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SPIKE_BLUE:
+		if(Layer == LAYER_GAME)
+			return "BLUE SPIKE: Blue team spikes. Gives negative points when killer is in red team. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SCORE_RED:
+		if(Layer == LAYER_GAME)
+			return "SCORE: Old tile used for showing red team score using laser text. No longer usable in FNG2.";
+		break;
+	case TILE_FNG_SCORE_BLUE:
+		if(Layer == LAYER_GAME)
+			return "SCORE: Old tile used for showing blue team score using laser text. No longer usable in FNG2.";
+		break;
+	case TILE_FNG_SPIKE_GREEN:
+		if(Layer == LAYER_GAME)
+			return "GREEN SPIKE: Kills the tee and gives points to the killer. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SPIKE_PURPLE:
+		if(Layer == LAYER_GAME)
+			return "PURPLE SPIKE: Kills the tee and gives points to the killer. Amount of points given is set inside the server.";
+		break;
+	case TILE_FNG_SPAWN:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Here tees will appear after joining the game or dying.";
+		break;
+	case TILE_FNG_SPAWN_RED:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Red team members spawn here.";
+		break;
+	case TILE_FNG_SPAWN_BLUE:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Blue team members spawn here.";
+		break;
+	case TILE_FNG_FLAG_RED:
+		if(Layer == LAYER_GAME)
+			return "FLAG: Not used in FNG. Place where red team flag is.";
+		break;
+	case TILE_FNG_FLAG_BLUE:
+		if(Layer == LAYER_GAME)
+			return "FLAG: Not used in FNG. Place where blue team flag is.";
+		break;
+	case TILE_FNG_SHIELD:
+		if(Layer == LAYER_GAME)
+			return "SHIELD: Does nothing in FNG.";
+		break;
+	case TILE_FNG_HEART:
+		if(Layer == LAYER_GAME)
+			return "HEART: Does nothing in FNG.";
+		break;
+	case TILE_FNG_SHOTGUN:
+		if(Layer == LAYER_GAME)
+			return "SHOTGUN: Not used in FNG. Gives you shotgun with 10 charges.";
+		break;
+	case TILE_FNG_GRENADE:
+		if(Layer == LAYER_GAME)
+			return "GRENADE: Gives you grenade weapon with 10 charges. Not really useful in FNG.";
+		break;
+	case TILE_FNG_NINJA:
+		if(Layer == LAYER_GAME)
+			return "NINJA: Does nothing in FNG.";
+		break;
+	case TILE_FNG_LASER:
+		if(Layer == LAYER_GAME)
+			return "LASER: Gives you laser weapon with 10 charges. Not really useful in FNG.";
+		break;
+	case TILE_FNG_SPIKE_OLD1:
+	case TILE_FNG_SPIKE_OLD2:
+	case TILE_FNG_SPIKE_OLD3:
+		if(Layer == LAYER_GAME)
+			return "SPIKE: Old FNG spikes. Deprecated.";
+		break;
+	}
+	if((Tile >= TILE_PUB_CREDITS1 && Tile <= TILE_PUB_CREDITS8) && Layer == LAYER_GAME)
+		return "CREDITS: Who designed the entities.";
+	else if((Tile == TILE_PUB_ENTITIES_OFF1 || Tile == TILE_PUB_ENTITIES_OFF2) && Layer == LAYER_GAME)
+		return "ENTITIES OFF SIGN: Informs people playing with entities about important marks, tips, information or text on the map.";
+	return nullptr;
+}
+
+const char *CExplanations::ExplainVanilla(int Tile, int Layer)
+{
+	switch(Tile)
+	{
+	case TILE_PUB_AIR:
+		return "EMPTY: Can be used as an eraser.";
+	case TILE_PUB_HOOKABLE:
+		if(Layer == LAYER_GAME)
+			return "HOOKABLE: It's possible to hook and collide with it.";
+		break;
+	case TILE_PUB_DEATH:
+		if(Layer == LAYER_GAME)
+			return "DEATH: Kills the tee.";
+		break;
+	case TILE_PUB_UNHOOKABLE:
+		if(Layer == LAYER_GAME)
+			return "UNHOOKABLE: It's not possible to hook it, but can collide with it.";
+		break;
+	case TILE_VANILLA_SPAWN:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Here tees will appear after joining the game or dying.";
+		break;
+	case TILE_VANILLA_SPAWN_RED:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Red team members spawn here.";
+		break;
+	case TILE_VANILLA_SPAWN_BLUE:
+		if(Layer == LAYER_GAME)
+			return "SPAWN: Blue team members spawn here.";
+		break;
+	case TILE_VANILLA_FLAG_RED:
+		if(Layer == LAYER_GAME)
+			return "FLAG: Place where red team flag is.";
+		break;
+	case TILE_VANILLA_FLAG_BLUE:
+		if(Layer == LAYER_GAME)
+			return "FLAG: Place where blue team flag is.";
+		break;
+	case TILE_VANILLA_SHIELD:
+		if(Layer == LAYER_GAME)
+			return "SHIELD: Gives player +1 shield.";
+		break;
+	case TILE_VANILLA_HEART:
+		if(Layer == LAYER_GAME)
+			return "HEART: Gives player +1 health";
+		break;
+	case TILE_VANILLA_SHOTGUN:
+		if(Layer == LAYER_GAME)
+			return "SHOTGUN: Gives you shotgun weapon with 10 charges.";
+		break;
+	case TILE_VANILLA_GRENADE:
+		if(Layer == LAYER_GAME)
+			return "GRENADE: Gives you grenade weapon with 10 charges.";
+		break;
+	case TILE_VANILLA_NINJA:
+		if(Layer == LAYER_GAME)
+			return "NINJA: Gives you ninja for a period of time.";
+		break;
+	case TILE_VANILLA_LASER:
+		if(Layer == LAYER_GAME)
+			return "LASER: Gives you laser weapon with 10 charges.";
+		break;
+	}
+	if((Tile >= TILE_PUB_CREDITS1 && Tile <= TILE_PUB_CREDITS8) && Layer == LAYER_GAME)
+		return "CREDITS: Who designed the entities.";
+	else if((Tile == TILE_PUB_ENTITIES_OFF1 || Tile == TILE_PUB_ENTITIES_OFF2) && Layer == LAYER_GAME)
+		return "ENTITIES OFF SIGN: Informs people playing with entities about important marks, tips, information or text on the map.";
+	return nullptr;
+}
+
+const char *CExplanations::Explain(EGametype Gametype, int Tile, int Layer)
+{
+	switch(Gametype)
+	{
+	case EGametype::NONE:
+		return nullptr;
+	case EGametype::DDNET:
+		return ExplainDDNet(Tile, Layer);
+	case EGametype::FNG:
+		return ExplainFNG(Tile, Layer);
+	case EGametype::RACE:
+		return nullptr; // TODO: Explanations for Race
+	case EGametype::VANILLA:
+		return ExplainVanilla(Tile, Layer);
+	case EGametype::BLOCKWORLDS:
+		return nullptr; // TODO: Explanations for Blockworlds
+	}
+	dbg_assert_failed("Gametype invalid: %d", (int)Gametype);
 }

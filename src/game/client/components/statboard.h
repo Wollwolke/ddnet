@@ -1,31 +1,35 @@
 #ifndef GAME_CLIENT_COMPONENTS_STATBOARD_H
 #define GAME_CLIENT_COMPONENTS_STATBOARD_H
 
+#include <engine/console.h>
+
 #include <game/client/component.h>
 
-class CStatboard: public CComponent
+#include <string>
+
+class CStatboard : public CComponent
 {
-	private:
-		bool m_Active;
-		bool m_ScreenshotTaken;
-		int64 m_ScreenshotTime;
-		static void ConKeyStats(IConsole::IResult *pResult, void *pUserData);
-		void RenderGlobalStats();
-		void AutoStatScreenshot();
-		void AutoStatCSV();
+private:
+	bool m_Active;
+	bool m_ScreenshotTaken;
+	int64_t m_ScreenshotTime;
+	static void ConKeyStats(IConsole::IResult *pResult, void *pUserData);
+	void RenderGlobalStats();
+	void AutoStatScreenshot();
+	void AutoStatCSV();
 
-		char* m_pCSVstr;
-		char* ReplaceCommata(char* pStr);
-		void FormatStats();
+	std::string ReplaceCommata(const char *pStr);
+	void FormatStats(char *pDest, size_t DestSize);
 
-	public:
-		CStatboard();
-		virtual void OnReset();
-		virtual void OnConsoleInit();
-		virtual void OnRender();
-		virtual void OnRelease();
-		virtual void OnMessage(int MsgType, void *pRawMsg);
-		bool IsActive();
+public:
+	CStatboard();
+	int Sizeof() const override { return sizeof(*this); }
+	void OnReset() override;
+	void OnConsoleInit() override;
+	void OnRender() override;
+	void OnRelease() override;
+	void OnMessage(int MsgType, void *pRawMsg) override;
+	bool IsActive() const;
 };
 
 #endif // GAME_CLIENT_COMPONENTS_STATBOARD_H

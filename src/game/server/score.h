@@ -1,81 +1,77 @@
 #ifndef GAME_SERVER_SCORE_H
 #define GAME_SERVER_SCORE_H
 
-#include <memory>
-#include <atomic>
+#include "scoreworker.h"
 
-#include "save.h"
+#include <game/prng.h>
 
-enum
-{
-	NUM_CHECKPOINTS = 25,
-	TIMESTAMP_STR_LENGTH = 20, // 2019-04-02 19:38:36
-};
+class CDbConnectionPool;
+class CGameContext;
+class IDbConnection;
+class IServer;
+struct ISqlData;
 
-class CPlayerData
-{
-public:
-	CPlayerData()
-	{
-		Reset();
-	}
-	~CPlayerData() {}
-
-	void Reset()
-	{
-		m_BestTime = 0;
-		m_CurrentTime = 0;
-		for(int i = 0; i < NUM_CHECKPOINTS; i++)
-			m_aBestCpTime[i] = 0;
-	}
-
-	void Set(float Time, float CpTime[NUM_CHECKPOINTS])
-	{
-		m_BestTime = Time;
-		m_CurrentTime = Time;
-		for(int i = 0; i < NUM_CHECKPOINTS; i++)
-			m_aBestCpTime[i] = CpTime[i];
-	}
-
-	float m_BestTime;
-	float m_CurrentTime;
-	float m_aBestCpTime[NUM_CHECKPOINTS];
-};
-
-class IScore
+class CScore
 {
 	CPlayerData m_aPlayerData[MAX_CLIENTS];
+	CDbConnectionPool *m_pPool;
+
+	CGameContext *GameServer() const { return m_pGameServer; }
+	IServer *Server() const { return m_pServer; }
+	CGameContext *m_pGameServer;
+	IServer *m_pServer;
+
+	std::vector<std::string> m_vWordlist;
+	CPrng m_Prng;
+	void GeneratePassphrase(char *pBuf, int BufSize);
+
+	// returns new SqlResult bound to the player, if no current Thread is active for this player
+	std::shared_ptr<CScorePlayerResult> NewSqlPlayerResult(int ClientId);
+	// Creates for player database requests
+	void ExecPlayerThread(
+		bool (*pFuncPtr)(IDbConnection *, const ISqlData *, char *pError, int ErrorSize),
+		const char *pThreadName,
+		int ClientId,
+		const char *pName,
+		int Offset);
+
+	// returns true if the player should be rate limited
+	bool RateLimitPlayer(int ClientId);
 
 public:
-	virtual ~IScore() {}
+	CScore(CGameContext *pGameServer, CDbConnectionPool *pPool);
 
-	CPlayerData *PlayerData(int ID) { return &m_aPlayerData[ID]; }
+	CPlayerData *PlayerData(int Id) { return &m_aPlayerData[Id]; }
 
-	virtual void MapInfo(int ClientID, const char *pMapName) = 0;
-	virtual void MapVote(int ClientID, const char *pMapName) = 0;
-	virtual void LoadPlayerData(int ClientID) = 0;
-	virtual void SaveScore(int ClientID, float Time, const char *pTimestamp, float aCpTime[NUM_CHECKPOINTS], bool NotEligible) = 0;
+	void LoadBestTime();
+	void LoadMapInfo();
+	void MapInfo(int ClientId, const char *pMapName);
+	void MapVote(int ClientId, const char *pMapName);
+	void LoadPlayerData(int ClientId, const char *pName = "");
+	void LoadPlayerTimeCp(int ClientId, const char *pName = "");
+	void SaveScore(int ClientId, int TimeTicks, const char *pTimestamp, const float aTimeCp[NUM_CHECKPOINTS], bool NotEligible);
 
-	virtual void SaveTeamScore(int *pClientIDs, unsigned int Size, float Time, const char *pTimestamp) = 0;
+	void SaveTeamScore(int Team, int *pClientIds, unsigned int Size, int TimeTicks, const char *pTimestamp);
 
-	virtual void ShowTop5(int ClientID, int Offset=1) = 0;
-	virtual void ShowRank(int ClientID, const char *pName) = 0;
+	void ShowTop(int ClientId, int Offset = 1);
+	void ShowRank(int ClientId, const char *pName);
 
-	virtual void ShowTeamTop5(int ClientID, int Offset=1) = 0;
-	virtual void ShowTeamRank(int ClientID, const char *pName) = 0;
+	void ShowTeamTop5(int ClientId, int Offset = 1);
+	void ShowPlayerTeamTop5(int ClientId, const char *pName, int Offset = 1);
+	void ShowTeamRank(int ClientId, const char *pName);
 
-	virtual void ShowTopPoints(int ClientID, int Offset=1) = 0;
-	virtual void ShowPoints(int ClientID, const char *pName) = 0;
+	void ShowTopPoints(int ClientId, int Offset = 1);
+	void ShowPoints(int ClientId, const char *pName);
 
-	virtual void RandomMap(int ClientID, int Stars) = 0;
-	virtual void RandomUnfinishedMap(int ClientID, int Stars) = 0;
+	void ShowTimes(int ClientId, const char *pName, int Offset = 1);
+	void ShowTimes(int ClientId, int Offset = 1);
 
-	virtual void SaveTeam(int ClientID, const char *pCode, const char *pServer) = 0;
-	virtual void LoadTeam(const char *pCode, int ClientID) = 0;
-	virtual void GetSaves(int ClientID) = 0;
+	void RandomMap(int ClientId, int MinStars, int MaxStars);
+	void RandomUnfinishedMap(int ClientId, int MinStars, int MaxStars);
 
-	// called when the server is shut down but not on mapchange/reload
-	virtual void OnShutdown() = 0;
+	void SaveTeam(int ClientId, const char *pCode, const char *pServer);
+	void LoadTeam(const char *pCode, int ClientId);
+	void GetSaves(int ClientId);
 };
 
 #endif // GAME_SERVER_SCORE_H

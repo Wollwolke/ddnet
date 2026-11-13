@@ -1,52 +1,69 @@
 #ifndef GAME_EDITOR_AUTO_MAP_H
 #define GAME_EDITOR_AUTO_MAP_H
 
-#include <base/tl/array.h>
+#include <game/editor/map_object.h>
 
-class CAutoMapper
+#include <vector>
+
+class CAutomapper : public CMapObject
 {
-	struct CIndexInfo
+	class CIndexInfo
 	{
-		int m_ID;
+	public:
+		int m_Id;
 		int m_Flag;
 		bool m_TestFlag;
 	};
 
-	struct CPosRule
+	class CPosRule
 	{
+	public:
 		int m_X;
 		int m_Y;
 		int m_Value;
-		array<CIndexInfo> m_aIndexList;
+		std::vector<CIndexInfo> m_vIndexList;
+		bool m_IsGuide;
 
 		enum
 		{
-			NORULE=0,
+			NORULE = 0,
 			INDEX,
 			NOTINDEX
 		};
 	};
 
-	struct CIndexRule
+	class CModuloRule
 	{
-		int m_ID;
-		array<CPosRule> m_aRules;
+	public:
+		int m_ModX;
+		int m_ModY;
+		int m_OffsetX;
+		int m_OffsetY;
+	};
+
+	class CIndexRule
+	{
+	public:
+		int m_Id;
+		std::vector<CPosRule> m_vRules;
 		int m_Flag;
 		float m_RandomProbability;
+		std::vector<CModuloRule> m_vModuloRules;
 		bool m_DefaultRule;
 		bool m_SkipEmpty;
 		bool m_SkipFull;
 	};
-
-	struct CRun
+	class CRun
 	{
-		array<CIndexRule> m_aIndexRules;
+	public:
+		std::vector<CIndexRule> m_vIndexRules;
 		bool m_AutomapCopy;
 	};
 
-	struct CConfiguration
+	class CConfiguration
 	{
-		array<CRun> m_aRuns;
+	public:
+		std::vector<CRun> m_vRuns;
 		char m_aName[128];
 		int m_StartX;
 		int m_StartY;
@@ -55,22 +72,23 @@ class CAutoMapper
 	};
 
 public:
+	explicit CAutomapper(CEditorMap *pMap);
 
-	CAutoMapper(class CEditor *pEditor);
-
-	void Load(const char* pTileName);
-	void ProceedLocalized(class CLayerTiles *pLayer, int ConfigID, int Seed=0, int X=0, int Y=0, int Width=-1, int Height=-1);
-	void Proceed(class CLayerTiles *pLayer, int ConfigID, int Seed=0, int SeedOffsetX=0, int SeedOffsetY=0);
-
-	int ConfigNamesNum() const { return m_lConfigs.size(); }
-	const char* GetConfigName(int Index);
+	void Load(const char *pTileName);
+	void Unload();
+	int CheckIndexFlag(int Flag, const char *pFlag, bool CheckNone) const;
+	void ProceedLocalized(class CLayerTiles *pLayer, class CLayerTiles *pGameLayer, int ReferenceId, int ConfigId, int Seed = 0, int X = 0, int Y = 0, int Width = -1, int Height = -1);
+	void Proceed(class CLayerTiles *pLayer, class CLayerTiles *pGameLayer, int ReferenceId, int ConfigId, int Seed = 0, int SeedOffsetX = 0, int SeedOffsetY = 0);
+	int ConfigNamesNum() const { return m_vConfigs.size(); }
+	const char *GetConfigName(int Index) const;
 
 	bool IsLoaded() const { return m_FileLoaded; }
-private:
-	array<CConfiguration> m_lConfigs;
-	class CEditor *m_pEditor;
-	bool m_FileLoaded;
-};
 
+private:
+	void AutoMap(class CLayerTiles *pLayer, const class CLayerTiles *pReadLayer, const CRun *pRun, size_t RunIndex, bool IsFilterable, int Seed, int SeedOffsetX, int SeedOffsetY) const;
+
+	std::vector<CConfiguration> m_vConfigs;
+	bool m_FileLoaded = false;
+};
 
 #endif

@@ -1,118 +1,171 @@
 // Adapted from TWMapImagesRecovery by Tardo: https://github.com/Tardo/TWMapImagesRecovery
-#include <game/mapitems.h>
-#include <base/system.h>
-#include <engine/shared/datafile.h>
+
+#include <base/fs.h>
+#include <base/io.h>
+#include <base/logger.h>
+#include <base/os.h>
+#include <base/str.h>
+
+#include <engine/gfx/image_loader.h>
+#include <engine/map.h>
 #include <engine/storage.h>
 
-#include <pnglite.h>
+#include <game/mapitems.h>
 
-bool Process(IStorage *pStorage, const char *pMapName, const char *pPathSave)
+static constexpr const char *const TOOL_NAME = "map_extract";
+
+static void PrintMapInfo(IMap *pMap)
 {
-	CDataFileReader Map;
-
-	if(!Map.Open(pStorage, pMapName, IStorage::TYPE_ABSOLUTE))
-	{
-		dbg_msg("map_extract", "error opening map '%s'", pMapName);
-		return false;
-	}
-
-
-	// check version
-	CMapItemVersion *pVersion = (CMapItemVersion *)Map.FindItem(MAPITEMTYPE_VERSION, 0);
-	if(pVersion && pVersion->m_Version != 1)
-		return false;
-
-	dbg_msg("map_extract", "Make sure you have the permission to use these images and sounds in your own maps");
-
-	CMapItemInfo *pInfo = (CMapItemInfo *)Map.FindItem(MAPITEMTYPE_INFO, 0);
-
+	const CMapItemInfo *pInfo = static_cast<CMapItemInfo *>(pMap->FindItem(MAPITEMTYPE_INFO, 0));
 	if(pInfo)
 	{
-		dbg_msg("map_extract", "author:  %s", (char *)Map.GetData(pInfo->m_Author));
-		dbg_msg("map_extract", "version: %s", (char *)Map.GetData(pInfo->m_MapVersion));
-		dbg_msg("map_extract", "credits: %s", (char *)Map.GetData(pInfo->m_Credits));
-		dbg_msg("map_extract", "license: %s", (char *)Map.GetData(pInfo->m_License));
+		const char *pAuthor = pMap->GetDataString(pInfo->m_Author);
+		log_info(TOOL_NAME, "author:  %s", pAuthor == nullptr ? "(error)" : pAuthor);
+		const char *pMapVersion = pMap->GetDataString(pInfo->m_MapVersion);
+		log_info(TOOL_NAME, "version: %s", pMapVersion == nullptr ? "(error)" : pMapVersion);
+		const char *pCredits = pMap->GetDataString(pInfo->m_Credits);
+		log_info(TOOL_NAME, "credits: %s", pCredits == nullptr ? "(error)" : pCredits);
+		const char *pLicense = pMap->GetDataString(pInfo->m_License);
+		log_info(TOOL_NAME, "license: %s", pLicense == nullptr ? "(error)" : pLicense);
 	}
-
-	int Start, Num;
-
-	// load images
-	Map.GetType(MAPITEMTYPE_IMAGE, &Start, &Num);
-
-	for(int i = 0; i < Num; i++)
-	{
-		CMapItemImage *pItem = (CMapItemImage *)Map.GetItem(Start+i, 0, 0);
-		char *pName = (char *)Map.GetData(pItem->m_ImageName);
-
-		if(pItem->m_External)
-			continue;
-
-		char aBuf[512];
-		str_format(aBuf, sizeof(aBuf), "%s/%s.png", pPathSave, pName);
-		dbg_msg("map_extract", "writing image: %s (%dx%d)", aBuf, pItem->m_Width, pItem->m_Height);
-
-		// copy image data
-		png_t Png;
-		png_open_file_write(&Png, aBuf);
-		png_set_data(&Png, pItem->m_Width, pItem->m_Height, 8, PNG_TRUECOLOR_ALPHA, (unsigned char*)Map.GetData(pItem->m_ImageData));
-		png_close_file(&Png);
-	}
-
-	// load sounds
-	Map.GetType(MAPITEMTYPE_SOUND, &Start, &Num);
-
-	for(int i = 0; i < Num; i++)
-	{
-		CMapItemSound *pItem = (CMapItemSound *)Map.GetItem(Start+i, 0, 0);
-		char *pName = (char *)Map.GetData(pItem->m_SoundName);
-
-		if(pItem->m_External)
-			continue;
-
-		char aBuf[512];
-		str_format(aBuf, sizeof(aBuf), "%s/%s.opus", pPathSave, pName);
-		dbg_msg("map_extract", "writing sound: %s (%d B)", aBuf, pItem->m_SoundDataSize);
-
-		IOHANDLE Opus = io_open(aBuf, IOFLAG_WRITE);
-		io_write(Opus, (unsigned char*)Map.GetData(pItem->m_SoundData), pItem->m_SoundDataSize);
-		io_close(Opus);
-	}
-
-	return Map.Close();
 }
 
-int main(int argc, char *argv[])
+static void ExtractMapImages(IMap *pMap, const char *pPathSave)
 {
-	dbg_logger_stdout();
-
-	char aMap[512];
-	char aDir[512];
-
-	IStorage *pStorage = CreateLocalStorage();
-
-	if (argc == 2)
+	int Start, Num;
+	pMap->GetType(MAPITEMTYPE_IMAGE, &Start, &Num);
+	for(int i = 0; i < Num; i++)
 	{
-		str_copy(aMap, argv[1], sizeof(aMap));
-		str_copy(aDir, ".", sizeof(aMap));
+		const CMapItemImage_v2 *pItem = static_cast<CMapItemImage_v2 *>(pMap->GetItem(Start + i));
+		if(pItem->m_External)
+			continue;
+
+		const char *pName = pMap->GetDataString(pItem->m_ImageName);
+		if(pName == nullptr || pName[0] == '\0')
+		{
+			log_error(TOOL_NAME, "failed to load name of image %d", i);
+			continue;
+		}
+
+		char aBuf[IO_MAX_PATH_LENGTH];
+		str_format(aBuf, sizeof(aBuf), "%s/%s.png", pPathSave, pName);
+		pMap->UnloadData(pItem->m_ImageName);
+
+		if(pItem->m_Version >= 2 && pItem->m_MustBe1 != 1)
+		{
+			log_error(TOOL_NAME, "ignoring image '%s' with unknown format %d", aBuf, pItem->m_MustBe1);
+			continue;
+		}
+
+		if(pItem->m_Width <= 0 || pItem->m_Height <= 0)
+		{
+			log_error(TOOL_NAME, "ignoring image '%s' with invalid dimensions %dx%d", aBuf, pItem->m_Width, pItem->m_Height);
+			continue;
+		}
+
+		CImageInfo Image;
+		Image.m_Width = pItem->m_Width;
+		Image.m_Height = pItem->m_Height;
+		Image.m_Format = CImageInfo::FORMAT_RGBA;
+		Image.m_pData = static_cast<uint8_t *>(pMap->GetData(pItem->m_ImageData));
+
+		log_info(TOOL_NAME, "writing image: %s (%dx%d)", aBuf, pItem->m_Width, pItem->m_Height);
+		if(!CImageLoader::SavePng(io_open(aBuf, IOFLAG_WRITE), aBuf, Image))
+		{
+			log_error(TOOL_NAME, "failed to write image file. filename='%s'", aBuf);
+		}
+		pMap->UnloadData(pItem->m_ImageData);
 	}
-	else if (argc == 3)
+}
+
+static void ExtractMapSounds(IMap *pMap, const char *pPathSave)
+{
+	int Start, Num;
+	pMap->GetType(MAPITEMTYPE_SOUND, &Start, &Num);
+	for(int i = 0; i < Num; i++)
 	{
-		str_copy(aMap, argv[1], sizeof(aMap));
-		str_copy(aDir, argv[2], sizeof(aDir));
+		const CMapItemSound *pItem = static_cast<CMapItemSound *>(pMap->GetItem(Start + i));
+		if(pItem->m_External)
+			continue;
+
+		const char *pName = pMap->GetDataString(pItem->m_SoundName);
+		if(pName == nullptr || pName[0] == '\0')
+		{
+			log_error(TOOL_NAME, "failed to load name of sound %d", i);
+			continue;
+		}
+
+		const int SoundDataSize = pMap->GetDataSize(pItem->m_SoundData);
+		char aBuf[IO_MAX_PATH_LENGTH];
+		str_format(aBuf, sizeof(aBuf), "%s/%s.opus", pPathSave, pName);
+		pMap->UnloadData(pItem->m_SoundName);
+
+		IOHANDLE Opus = io_open(aBuf, IOFLAG_WRITE);
+		if(Opus)
+		{
+			log_info(TOOL_NAME, "writing sound: %s (%d B)", aBuf, SoundDataSize);
+			io_write(Opus, pMap->GetData(pItem->m_SoundData), SoundDataSize);
+			io_close(Opus);
+			pMap->UnloadData(pItem->m_SoundData);
+		}
+		else
+		{
+			log_error(TOOL_NAME, "failed to open sound file for writing. filename='%s'", aBuf);
+		}
+	}
+}
+
+static bool ExtractMap(IStorage *pStorage, const char *pMapName, const char *pPathSave)
+{
+	std::shared_ptr<IMap> pMap = CreateMap();
+	if(!pMap->Load(pStorage, pMapName, IStorage::TYPE_ABSOLUTE))
+	{
+		log_error(TOOL_NAME, "error opening map '%s'", pMapName);
+		return false;
+	}
+
+	log_info(TOOL_NAME, "Make sure you have the permission to use these images and sounds in your own maps");
+
+	PrintMapInfo(pMap.get());
+	ExtractMapImages(pMap.get(), pPathSave);
+	ExtractMapSounds(pMap.get(), pPathSave);
+
+	pMap->Unload();
+	return true;
+}
+
+int main(int argc, const char *argv[])
+{
+	CCmdlineFix CmdlineFix(&argc, &argv);
+	log_set_global_logger_default();
+
+	std::unique_ptr<IStorage> pStorage = CreateLocalStorage();
+	if(!pStorage)
+	{
+		log_error(TOOL_NAME, "Error creating local storage");
+		return -1;
+	}
+
+	const char *pDir;
+	if(argc == 2)
+	{
+		pDir = ".";
+	}
+	else if(argc == 3)
+	{
+		pDir = argv[2];
 	}
 	else
 	{
-		dbg_msg("usage", "%s map [directory]", argv[0]);
+		log_error(TOOL_NAME, "Usage: %s <map> [directory]", argc > 0 ? argv[0] : TOOL_NAME);
 		return -1;
 	}
 
-	if (!fs_is_dir(aDir))
+	if(!fs_is_dir(pDir))
 	{
-		dbg_msg("usage", "directory '%s' does not exist", aDir);
+		log_error(TOOL_NAME, "directory '%s' does not exist", pDir);
 		return -1;
 	}
 
-	png_init(0, 0);
-
-	return Process(pStorage, aMap, aDir) ? 0 : 1;
+	return ExtractMap(pStorage.get(), argv[1], pDir) ? 0 : 1;
 }

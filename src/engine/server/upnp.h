@@ -1,18 +1,25 @@
 #ifndef ENGINE_SERVER_UPNP_H
 #define ENGINE_SERVER_UPNP_H
 
-#include <base/system.h>
+#include <base/types.h>
+
+// NOLINTBEGIN(readability-identifier-naming)
+struct IGDdatas;
+struct UPNPDev;
+struct UPNPUrls;
+// NOLINTEND(readability-identifier-naming)
+
 class CUPnP
 {
 	NETADDR m_Addr;
-	struct UPNPUrls *m_UPnPUrls;
-	struct IGDdatas *m_UPnPData;
-	struct UPNPDev *m_UPnPDevice;
+	UPNPUrls *m_pUpnpUrls;
+	IGDdatas *m_pUpnpData;
+	UPNPDev *m_pUpnpDevice;
 	bool m_Enabled;
 
 public:
 	void Open(NETADDR Address);
-	void Shutdown(); 
+	void Shutdown();
 };
 
 #endif

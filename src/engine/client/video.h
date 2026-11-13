@@ -1,138 +1,176 @@
 #ifndef ENGINE_CLIENT_VIDEO_H
 #define ENGINE_CLIENT_VIDEO_H
 
-#if defined(__ANDROID__)
-	#define GL_GLEXT_PROTOTYPES
-	#include <GLES/gl.h>
-	#include <GLES/glext.h>
-	#include <GL/glu.h>
-	#define glOrtho glOrthof
-#else
-	#include "SDL_opengl.h"
+#include <base/lock.h>
 
-	#if defined(CONF_PLATFORM_MACOSX)
-		#include "OpenGL/glu.h"
-	#else
-		#include "GL/glu.h"
-	#endif
-#endif
-
-
-extern "C"
-{
-	#include <libavcodec/avcodec.h>
-	#include <libavformat/avformat.h>
-	#include <libavutil/imgutils.h>
-	#include <libavutil/opt.h>
-	#include <libswscale/swscale.h>
-	#include <libswresample/swresample.h>
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
 };
 
-#include <base/system.h>
-
 #include <engine/shared/video.h>
-#include <engine/shared/demo.h>
-#define ALEN 2048
 
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+class IGraphics;
+class ISound;
+class IStorage;
 
 // a wrapper around a single output AVStream
-typedef struct OutputStream {
-	AVStream *pSt;
-	AVCodecContext *pEnc;
+class COutputStream
+{
+public:
+	AVStream *m_pStream = nullptr;
+	AVCodecContext *m_pCodecContext = nullptr;
 
 	/* pts of the next frame that will be generated */
-	int64_t NextPts;
-	int SamplesCount;
+	int64_t m_SamplesCount = 0;
+	int64_t m_SamplesFrameCount = 0;
 
-	AVFrame *pFrame;
-	AVFrame *pTmpFrame;
+	std::vector<AVFrame *> m_vpFrames;
+	std::vector<AVFrame *> m_vpTmpFrames;
 
-	struct SwsContext *pSwsCtx;
-	struct SwrContext *pSwrCtx;
-} OutputStream;
+	std::vector<struct SwsContext *> m_vpSwsContexts;
+	std::vector<struct SwrContext *> m_vpSwrContexts;
+};
 
 class CVideo : public IVideo
 {
 public:
-	CVideo(class CGraphics_Threaded* pGraphics, class IStorage* pStorage, class IConsole *pConsole, int width, int height, const char *name);
-	~CVideo();
+	CVideo(IGraphics *pGraphics, ISound *pSound, IStorage *pStorage, int Width, int Height, int64_t LocalStartTime, const char *pName);
+	~CVideo() override;
 
-	virtual void Start();
-	virtual void Stop();
-	virtual void Pause(bool Pause);
-	virtual bool IsRecording() { return m_Recording; }
+	bool Start() override REQUIRES(!m_WriteLock);
+	void Stop() override;
+	void Pause(bool Pause) override;
+	bool IsRecording() const override { return m_Recording; }
 
-	virtual void NextVideoFrame();
-	virtual void NextVideoFrameThread();
-	virtual bool FrameRendered() { return !m_NextFrame; }
+	void NextVideoFrame() override;
+	void NextVideoFrameThread() override;
 
-	virtual void NextAudioFrame(void (*Mix)(short *pFinalOut, unsigned Frames));
-	virtual void NextAudioFrameTimeline();
-	virtual bool AudioFrameRendered() { return !m_NextAudioFrame; }
+	void NextAudioFrame(ISoundMixFunc Mix) override;
+	void NextAudioFrameTimeline(ISoundMixFunc Mix) override;
 
-	static IVideo* Current() { return IVideo::ms_pCurrentVideo; }
+	int64_t Time() const override { return m_Time; }
+	float LocalTime() const override { return m_LocalTime; }
+	void SetLocalStartTime(int64_t LocalStartTime) override { m_LocalStartTime = LocalStartTime; }
 
-	static void Init() { av_log_set_level(AV_LOG_DEBUG); }
+	static void Init();
 
 private:
-	void FillVideoFrame();
-	void ReadRGBFromGL();
+	void RunVideoThread(size_t ParentThreadIndex, size_t ThreadIndex) REQUIRES(!m_WriteLock);
+	void FillVideoFrame(size_t ThreadIndex) REQUIRES(!m_WriteLock);
+	void UpdateVideoBufferFromGraphics(size_t ThreadIndex);
 
-	void FillAudioFrame();
+	void RunAudioThread(size_t ParentThreadIndex, size_t ThreadIndex) REQUIRES(!m_WriteLock);
+	void FillAudioFrame(size_t ThreadIndex);
 
-	void OpenVideo();
-	void OpenAudio();
+	bool OpenVideo();
+	bool OpenAudio();
 	AVFrame *AllocPicture(enum AVPixelFormat PixFmt, int Width, int Height);
-	AVFrame* AllocAudioFrame(enum AVSampleFormat SampleFmt, uint64_t ChannelLayout, int SampleRate, int NbSamples);
+	AVFrame *AllocAudioFrame(enum AVSampleFormat SampleFmt, uint64_t ChannelLayout, int SampleRate, int NbSamples);
 
-	void WriteFrame(OutputStream* pStream);
-	void FinishFrames(OutputStream* pStream);
-	void CloseStream(OutputStream *pStream);
+	void WriteFrame(COutputStream *pStream, size_t ThreadIndex) REQUIRES(m_WriteLock);
+	void FinishFrames(COutputStream *pStream);
+	void CloseStream(COutputStream *pStream);
 
-	void AddStream(OutputStream *pStream, AVFormatContext *pOC, AVCodec **ppCodec, enum AVCodecID CodecId);
+	bool AddStream(COutputStream *pStream, AVFormatContext *pFormatContext, const AVCodec **ppCodec, enum AVCodecID CodecId) const;
 
-	class CGraphics_Threaded* m_pGraphics;
-	class IStorage* m_pStorage;
-	class IConsole* m_pConsole;
+	IGraphics *m_pGraphics;
+	IStorage *m_pStorage;
+	ISound *m_pSound;
 
 	int m_Width;
 	int m_Height;
-	char m_Name[256];
-	//FILE *m_dbgfile;
-	int m_Vseq;
-	short m_aBuffer[ALEN*2];
-	int m_Vframe;
+	char m_aName[256];
+	uint64_t m_VideoFrameIndex = 0;
+	uint64_t m_AudioFrameIndex = 0;
 
 	int m_FPS;
+	int64_t m_TickTime;
+	int64_t m_LocalStartTime;
+	float m_LocalTime;
+	int64_t m_Time;
 
 	bool m_Started;
+	bool m_Stopped;
 	bool m_Recording;
 
-	bool m_ProcessingVideoFrame;
-	bool m_ProcessingAudioFrame;
+	CLock m_WriteLock;
+	size_t m_VideoThreads = 2;
+	size_t m_CurVideoThreadIndex = 0;
+	size_t m_AudioThreads = 2;
+	size_t m_CurAudioThreadIndex = 0;
 
-	bool m_NextFrame;
-	bool m_NextAudioFrame;
+	class CVideoRecorderThread
+	{
+	public:
+		std::thread m_Thread;
+		std::mutex m_Mutex;
+		std::condition_variable m_Cond;
+
+		bool m_Started = false;
+		bool m_Finished = false;
+		bool m_HasVideoFrame = false;
+
+		std::mutex m_VideoFillMutex;
+		std::condition_variable m_VideoFillCond;
+		uint64_t m_VideoFrameToFill = 0;
+	};
+
+	std::vector<std::unique_ptr<CVideoRecorderThread>> m_vpVideoThreads;
+
+	class CAudioRecorderThread
+	{
+	public:
+		std::thread m_Thread;
+		std::mutex m_Mutex;
+		std::condition_variable m_Cond;
+
+		bool m_Started = false;
+		bool m_Finished = false;
+		bool m_HasAudioFrame = false;
+
+		std::mutex m_AudioFillMutex;
+		std::condition_variable m_AudioFillCond;
+		uint64_t m_AudioFrameToFill = 0;
+		int64_t m_SampleCountStart = 0;
+	};
+
+	std::vector<std::unique_ptr<CAudioRecorderThread>> m_vpAudioThreads;
+
+	std::atomic<int32_t> m_ProcessingVideoFrame;
+	std::atomic<int32_t> m_ProcessingAudioFrame;
 
 	bool m_HasAudio;
 
-	GLubyte* m_pPixels;
+	class CVideoBuffer
+	{
+	public:
+		std::vector<uint8_t> m_vBuffer;
+	};
+	std::vector<CVideoBuffer> m_vVideoBuffers;
+	class CAudioBuffer
+	{
+	public:
+		int16_t m_aBuffer[4096];
+	};
+	std::vector<CAudioBuffer> m_vAudioBuffers;
 
-	OutputStream m_VideoStream;
-	OutputStream m_AudioStream;
+	COutputStream m_VideoStream;
+	COutputStream m_AudioStream;
 
-	AVCodec* m_VideoCodec;
-	AVCodec* m_AudioCodec;
+	const AVCodec *m_pVideoCodec;
+	const AVCodec *m_pAudioCodec;
 
-	AVDictionary* m_pOptDict;
+	AVDictionary *m_pOptDict;
 
-	AVFormatContext* m_pFormatContext;
-	AVOutputFormat* m_pFormat;
-
-	uint8_t* m_pRGB;
-
-	int m_SndBufferSize;
+	AVFormatContext *m_pFormatContext;
+	const AVOutputFormat *m_pFormat;
 };
-
 
 #endif

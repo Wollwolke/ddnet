@@ -4,40 +4,54 @@
 #define GAME_CLIENT_COMPONENTS_SPECTATOR_H
 #include <base/vmath.h>
 
+#include <engine/console.h>
+
 #include <game/client/component.h>
+#include <game/client/ui.h>
 
 class CSpectator : public CComponent
 {
 	enum
 	{
-		NO_SELECTION=-3,
+		MULTI_VIEW = -4,
+		NO_SELECTION = -3,
 	};
 
 	bool m_Active;
 	bool m_WasActive;
 
-	int m_SelectedSpectatorID;
+	int m_SelectedSpectatorId;
 	vec2 m_SelectorMouse;
 
-	float m_OldMouseX;
-	float m_OldMouseY;
+	CUi::CTouchState m_TouchState;
+
+	float m_MultiViewActivateDelay;
+
+	bool CanChangeSpectatorId();
+	void SpectateNext(bool Reverse);
 
 	static void ConKeySpectator(IConsole::IResult *pResult, void *pUserData);
 	static void ConSpectate(IConsole::IResult *pResult, void *pUserData);
 	static void ConSpectateNext(IConsole::IResult *pResult, void *pUserData);
 	static void ConSpectatePrevious(IConsole::IResult *pResult, void *pUserData);
 	static void ConSpectateClosest(IConsole::IResult *pResult, void *pUserData);
+	static void ConMultiView(IConsole::IResult *pResult, void *pUserData);
 
 public:
 	CSpectator();
+	int Sizeof() const override { return sizeof(*this); }
 
-	virtual void OnConsoleInit();
-	virtual bool OnMouseMove(float x, float y);
-	virtual void OnRender();
-	virtual void OnRelease();
-	virtual void OnReset();
+	void OnConsoleInit() override;
+	bool OnCursorMove(float x, float y, IInput::ECursorType CursorType) override;
+	bool OnInput(const IInput::CEvent &Event) override;
+	void OnRender() override;
+	void OnRelease() override;
+	void OnReset() override;
 
-	void Spectate(int SpectatorID);
+	void Spectate(int SpectatorId);
+	void SpectateClosest();
+
+	bool IsActive() const { return m_Active; }
 };
 
 #endif

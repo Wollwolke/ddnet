@@ -24,7 +24,7 @@ Items can be added when <mods_snap> is called using the <snap_new_item> function
 Section: Client Side
 
 Topic: Inspection
-<modc_newsnapshot> is called when a new snapshot has arrived for processing. <snap_num_items>, <snap_get_item> and <snap_find_item> can be used to inspect the current and previous snapshot. This can be done anywhere while the client is running and not just in the <modc_newsnapshot> function. The client can also call <snap_invalidate_item> if an item contains improper information that could harm the operation of the client. This should however be done in <modc_newsnapshot> to assure that no bad data propagates into the rest of the client.
+<modc_newsnapshot> is called when a new snapshot has arrived for processing. <snap_num_items>, <snap_get_item> and <snap_find_item> can be used to inspect the current and previous snapshot. This can be done anywhere while the client is running and not just in the <modc_newsnapshot> function.
 
 Topic: Rendering
 DOCTODO
@@ -33,7 +33,7 @@ Section: In depth
 
 Topic: Compression
 
-After a snapshot have been created, compression is applyed to reduce the bandwidth. There are several steps taken inorder to reduce the size of the size of the snapshot.
+After a snapshot has been created, compression is applied to reduce the bandwidth. There are several steps taken in order to reduce the size of the snapshot.
 
 - *Delta*. The server looks in a clients backlog of snapshots to find a previous acked snapshot. It then compares the two snapshots and creates a delta snapshot containing the changes from the previous acked snapshot to the new one.
 - *Variable Integers*. The delta snapshot which is only consisting of 32-bit integers is then encoded into variable integers similar to UTF-8. Each byte has a bit that tells the decoder that it needs one more byte to decode the 32-bit integer. The first byte also contains a bit for telling the sign of the integer.
@@ -50,8 +50,8 @@ Topic: Interval
 
 The interval for how often a client receives a snapshot changes during the course of the connection. There are three different snapshot rates.
 
-- *Init*. 5 snapshots per second. Used when a client is connecting and used until the client has acknowlaged a snapshot. This mechanism is used because the first snapshot because no delta compression can be done.
+- *Init*. 5 snapshots per second. Used when a client is connecting and used until the client has acknowledged a snapshot. This mechanism is used because the first snapshot because no delta compression can be done.
 
 - *Full*. Snapshot for every tick or every even tick depending on server configuration. This is used during normal gameplay and everything is running smooth.
 
-- *Recovery*. 1 snapshot each second. A client enters recovery rate when it haven't acknowlaged a snapshot over 1 second. This is to let the client to beable to recover if it has a slow connection.
+- *Recovery*. 1 snapshot each second. A client enters recovery rate when it hasn't acknowledged a snapshot over 1 second. This is to let the client be able to recover if it has a slow connection.

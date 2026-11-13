@@ -1,88 +1,38 @@
 /* (c) DDNet developers. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.  */
 
-#include <base/system.h>
-#include <base/math.h>
+#include <base/fs.h>
+#include <base/io.h>
+#include <base/logger.h>
+#include <base/os.h>
+#include <base/str.h>
+
+#include <engine/gfx/image_loader.h>
+#include <engine/map.h>
 #include <engine/shared/datafile.h>
 #include <engine/storage.h>
-#include <engine/graphics.h>
+
+#include <game/gamecore.h>
 #include <game/mapitems.h>
 
-#include <pnglite.h>
-/*
-	Usage: map_convert_07 <source map filepath> <dest map filepath>
-*/
+#include <utility>
 
-CDataFileReader g_DataReader;
-CDataFileWriter g_DataWriter;
+static constexpr const char *const TOOL_NAME = "map_convert_07";
 
 // global new image data (set by ReplaceImageItem)
-int g_NewDataSize[64];
-void *g_pNewData[64];
+static CImageInfo g_aNewImageInfos[MAX_MAPIMAGES];
 
-int g_Index = 0;
-int g_NextDataItemID = -1;
+static int g_Index = 0;
+static int g_NextDataItemId = -1;
 
-int g_aImageIDs[64];
+static int g_aImageIds[MAX_MAPIMAGES];
 
-int LoadPNG(CImageInfo *pImg, const char *pFilename)
+static bool CheckImageDimensions(IMap *pMap, void *pLayerItem, int LayerType, const char *pFilename)
 {
-	unsigned char *pBuffer;
-	png_t Png;
-
-	int Error = png_open_file(&Png, pFilename);
-	if(Error != PNG_NO_ERROR)
-	{
-		dbg_msg("map_convert_07", "failed to open image file. filename='%s'", pFilename);
-		if(Error != PNG_FILE_ERROR)
-			png_close_file(&Png);
-		return 0;
-	}
-
-	if(Png.depth != 8 || (Png.color_type != PNG_TRUECOLOR && Png.color_type != PNG_TRUECOLOR_ALPHA) || Png.width > (2<<12) || Png.height > (2<<12))
-	{
-		dbg_msg("map_convert_07", "invalid image format. filename='%s'", pFilename);
-		png_close_file(&Png);
-		return 0;
-	}
-
-	pBuffer = (unsigned char *)malloc(Png.width * Png.height * Png.bpp);
-	png_get_data(&Png, pBuffer);
-	png_close_file(&Png);
-
-	pImg->m_Width = Png.width;
-	pImg->m_Height = Png.height;
-	if(Png.color_type == PNG_TRUECOLOR)
-		pImg->m_Format = CImageInfo::FORMAT_RGB;
-	else if(Png.color_type == PNG_TRUECOLOR_ALPHA)
-		pImg->m_Format = CImageInfo::FORMAT_RGBA;
-	pImg->m_pData = pBuffer;
-	return 1;
-}
-
-inline void IntsToStr(const int *pInts, int Num, char *pStr)
-{
-	while(Num)
-	{
-		pStr[0] = (((*pInts)>>24)&0xff)-128;
-		pStr[1] = (((*pInts)>>16)&0xff)-128;
-		pStr[2] = (((*pInts)>>8)&0xff)-128;
-		pStr[3] = ((*pInts)&0xff)-128;
-		pStr += 4;
-		pInts++;
-		Num--;
-	}
-
-	// null terminate
-	pStr[-1] = 0;
-}
-
-bool CheckImageDimensions(void *pItem, int Type, const char *pFilename)
-{
-	if(Type != MAPITEMTYPE_LAYER)
+	if(LayerType != MAPITEMTYPE_LAYER)
 		return true;
 
-	CMapItemLayer *pImgLayer = (CMapItemLayer *)pItem;
+	CMapItemLayer *pImgLayer = (CMapItemLayer *)pLayerItem;
 	if(pImgLayer->m_Type != LAYERTYPE_TILES)
 		return true;
 
@@ -90,53 +40,62 @@ bool CheckImageDimensions(void *pItem, int Type, const char *pFilename)
 	if(pTMap->m_Image == -1)
 		return true;
 
-	int TypeImg = 0;
-	int ID = 0;
-	void *pItem2 = g_DataReader.GetItem(g_aImageIDs[pTMap->m_Image], &TypeImg, &ID);
-	if(TypeImg != MAPITEMTYPE_IMAGE)
-		return true;
-
-	CMapItemImage *pImgItem = (CMapItemImage *)pItem2;
-	if(pImgItem->m_Width % 16 == 0)
-		return true;
-
-	char aTileLayerName[12];
-	IntsToStr(pTMap->m_aName, sizeof(pTMap->m_aName)/sizeof(int), aTileLayerName);
-	char *pName = (char *)g_DataReader.GetData(pImgItem->m_ImageName);
-	dbg_msg("map_convert_07", "%s: Tile layer \"%s\" uses image \"%s\" with width %d, which is not divisible by 16. This is not supported in Teeworlds 0.7. Please scale the image and replace it manually.", pFilename, aTileLayerName, pName, pImgItem->m_Width);
-	return false;
-}
-
-void *ReplaceImageItem(void *pItem, int Type, CMapItemImage *pNewImgItem)
-{
+	int Type;
+	void *pItem = pMap->GetItem(g_aImageIds[pTMap->m_Image], &Type);
 	if(Type != MAPITEMTYPE_IMAGE)
-		return pItem;
+		return true;
 
 	CMapItemImage *pImgItem = (CMapItemImage *)pItem;
 
-	if(!pImgItem->m_External)
-		return pItem;
+	if(pImgItem->m_Width % 16 == 0 && pImgItem->m_Height % 16 == 0 && pImgItem->m_Width > 0 && pImgItem->m_Height > 0)
+		return true;
 
-	char *pName = (char *)g_DataReader.GetData(pImgItem->m_ImageName);
-	dbg_msg("map_convert_07", "embedding image '%s'", pName);
+	char aTileLayerName[12];
+	IntsToStr(pTMap->m_aName, std::size(pTMap->m_aName), aTileLayerName, std::size(aTileLayerName));
+
+	const char *pName = pMap->GetDataString(pImgItem->m_ImageName);
+	log_error(TOOL_NAME, "%s: Tile layer \"%s\" uses image \"%s\" with width %d, height %d, which is not divisible by 16. This is not supported in Teeworlds 0.7. Please scale the image and replace it manually.", pFilename, aTileLayerName, pName == nullptr ? "(error)" : pName, pImgItem->m_Width, pImgItem->m_Height);
+	return false;
+}
+
+static void *ReplaceImageItem(IMap *pMap, int Index, CMapItemImage *pImgItem, CMapItemImage *pNewImgItem)
+{
+	if(!pImgItem->m_External)
+		return pImgItem;
+
+	const char *pName = pMap->GetDataString(pImgItem->m_ImageName);
+	if(pName == nullptr || pName[0] == '\0')
+	{
+		log_error(TOOL_NAME, "failed to load name of image %d", Index);
+		return pImgItem;
+	}
+
+	log_info(TOOL_NAME, "embedding image '%s'", pName);
+
+	char aStr[IO_MAX_PATH_LENGTH];
+	str_format(aStr, sizeof(aStr), "data/mapres/%s.png", pName);
 
 	CImageInfo ImgInfo;
-	ImgInfo.m_Format = CImageInfo::FORMAT_RGB;
-	char aStr[64];
-	str_format(aStr, sizeof(aStr), "data/mapres/%s.png", pName);
-	if(!LoadPNG(&ImgInfo, aStr))
-		return pItem; // keep as external if we don't have a mapres to replace
+	int PngliteIncompatible;
+	if(!CImageLoader::LoadPng(io_open(aStr, IOFLAG_READ), aStr, ImgInfo, PngliteIncompatible))
+		return pImgItem; // keep as external if we don't have a mapres to replace
+
+	const size_t MaxImageDimension = 1 << 13;
+	if(ImgInfo.m_Format != CImageInfo::FORMAT_RGBA || ImgInfo.m_Width > MaxImageDimension || ImgInfo.m_Height > MaxImageDimension)
+	{
+		log_error(TOOL_NAME, "only RGBA PNG images with maximum width/height %" PRIzu " are supported", MaxImageDimension);
+		ImgInfo.Free();
+		return pImgItem;
+	}
 
 	*pNewImgItem = *pImgItem;
 
 	pNewImgItem->m_Width = ImgInfo.m_Width;
 	pNewImgItem->m_Height = ImgInfo.m_Height;
 	pNewImgItem->m_External = false;
-	int PixelSize = ImgInfo.m_Format == CImageInfo::FORMAT_RGB ? 3 : 4;
-	pNewImgItem->m_ImageData = g_NextDataItemID++;
+	pNewImgItem->m_ImageData = g_NextDataItemId++;
 
-	g_pNewData[g_Index] = ImgInfo.m_pData;
-	g_NewDataSize[g_Index] = ImgInfo.m_Width * ImgInfo.m_Height * PixelSize;
+	g_aNewImageInfos[g_Index] = std::move(ImgInfo);
 	g_Index++;
 
 	return (void *)pNewImgItem;
@@ -144,89 +103,125 @@ void *ReplaceImageItem(void *pItem, int Type, CMapItemImage *pNewImgItem)
 
 int main(int argc, const char **argv)
 {
-	dbg_logger_stdout();
+	CCmdlineFix CmdlineFix(&argc, &argv);
+	log_set_global_logger_default();
 
-	IStorage *pStorage = CreateStorage("Teeworlds", IStorage::STORAGETYPE_BASIC, argc, argv);
-
-	if(argc != 3)
+	if(argc < 2 || argc > 3)
 	{
-		dbg_msg("map_convert_07", "Invalid arguments");
-		dbg_msg("map_convert_07", "Usage: map_convert_07 <source map filepath> <dest map filepath>");
+		log_error(TOOL_NAME, "Invalid arguments");
+		log_error(TOOL_NAME, "Usage: %s <source map filepath> [<dest map filepath>]", argc > 0 ? argv[0] : TOOL_NAME);
 		return -1;
 	}
 
-	if (!pStorage)
+	std::unique_ptr<IStorage> pStorage = std::unique_ptr<IStorage>(CreateStorage(IStorage::EInitializationType::BASIC, argc, argv));
+	if(!pStorage)
 	{
-		dbg_msg("map_convert_07", "error loading storage");
+		log_error(TOOL_NAME, "Error creating basic storage");
 		return -1;
 	}
 
-	const char *pSourceFileName = argv[1];
-	const char *pDestFileName = argv[2];
+	const char *pSourceFilename = argv[1];
+	char aDestFilename[IO_MAX_PATH_LENGTH];
 
-	int ID = 0;
-	int Type = 0;
-	int Size = 0;
-	void *pItem = 0;
-	void *pData = 0;
-
-	if(!g_DataReader.Open(pStorage, pSourceFileName, IStorage::TYPE_ABSOLUTE))
+	if(argc == 3)
 	{
-		dbg_msg("map_convert_07", "failed to open source map. filename='%s'", pSourceFileName);
+		str_copy(aDestFilename, argv[2]);
+	}
+	else
+	{
+		char aBuf[IO_MAX_PATH_LENGTH];
+		fs_split_file_extension(fs_filename(pSourceFilename), aBuf, sizeof(aBuf));
+		str_format(aDestFilename, sizeof(aDestFilename), "data/maps7/%s.map", aBuf);
+		if(fs_makedir("data") != 0)
+		{
+			log_error(TOOL_NAME, "failed to create data directory");
+			return -1;
+		}
+
+		if(fs_makedir("data/maps7") != 0)
+		{
+			log_error(TOOL_NAME, "failed to create data/maps7 directory");
+			return -1;
+		}
+	}
+
+	std::shared_ptr<IMap> pMap = CreateMap();
+	if(!pMap->Load(pStorage.get(), pSourceFilename, IStorage::TYPE_ABSOLUTE))
+	{
+		log_error(TOOL_NAME, "failed to open source map. filename='%s'", pSourceFilename);
 		return -1;
 	}
 
-	if(!g_DataWriter.Open(pStorage, pDestFileName, IStorage::TYPE_ABSOLUTE))
+	CDataFileWriter Writer;
+	if(!Writer.Open(pStorage.get(), aDestFilename, IStorage::TYPE_ABSOLUTE))
 	{
-		dbg_msg("map_convert_07", "failed to open destination map. filename='%s'", pDestFileName);
+		log_error(TOOL_NAME, "failed to open destination map. filename='%s'", aDestFilename);
 		return -1;
 	}
 
-	png_init(0,0);
+	g_NextDataItemId = pMap->NumData();
 
-	g_NextDataItemID = g_DataReader.NumData();
-
-	int i = 0;
-	for(int Index = 0; Index < g_DataReader.NumItems(); Index++)
+	size_t i = 0;
+	for(int Index = 0; Index < pMap->NumItems(); Index++)
 	{
-		pItem = g_DataReader.GetItem(Index, &Type, &ID);
+		int Type;
+		pMap->GetItem(Index, &Type);
 		if(Type == MAPITEMTYPE_IMAGE)
-			g_aImageIDs[i++] = Index;
+		{
+			if(i >= MAX_MAPIMAGES)
+			{
+				log_warn(TOOL_NAME, "map uses more images than the client maximum of %" PRIzu ". filename='%s'", MAX_MAPIMAGES, pSourceFilename);
+				break;
+			}
+			g_aImageIds[i] = Index;
+			i++;
+		}
 	}
 
 	bool Success = true;
 
 	// add all items
-	for(int Index = 0; Index < g_DataReader.NumItems(); Index++)
+	for(int Index = 0; Index < pMap->NumItems(); Index++)
 	{
+		int Type, Id;
+		CUuid Uuid;
+		void *pItem = pMap->GetItem(Index, &Type, &Id, &Uuid);
+
+		// Filter ITEMTYPE_EX items, they will be automatically added again.
+		if(Type == ITEMTYPE_EX)
+		{
+			continue;
+		}
+
+		int Size = pMap->GetItemSize(Index);
+		Success &= CheckImageDimensions(pMap.get(), pItem, Type, pSourceFilename);
+
 		CMapItemImage NewImageItem;
-		pItem = g_DataReader.GetItem(Index, &Type, &ID);
-		Size = g_DataReader.GetItemSize(Index);
-
-		Success &= CheckImageDimensions(pItem, Type, pSourceFileName);
-
-		pItem = ReplaceImageItem(pItem, Type, &NewImageItem);
-		if(!pItem)
-			return -1;
-		g_DataWriter.AddItem(Type, ID, Size, pItem);
+		if(Type == MAPITEMTYPE_IMAGE)
+		{
+			pItem = ReplaceImageItem(pMap.get(), Index, (CMapItemImage *)pItem, &NewImageItem);
+			if(!pItem)
+				return -1;
+			Size = sizeof(CMapItemImage);
+			NewImageItem.m_Version = 1;
+		}
+		Writer.AddItem(Type, Id, Size, pItem, &Uuid);
 	}
 
 	// add all data
-	for(int Index = 0; Index < g_DataReader.NumData(); Index++)
+	for(int Index = 0; Index < pMap->NumData(); Index++)
 	{
-		pData = g_DataReader.GetData(Index);
-		Size = g_DataReader.GetDataSize(Index);
-		g_DataWriter.AddData(Size, pData);
+		void *pData = pMap->GetData(Index);
+		int Size = pMap->GetDataSize(Index);
+		Writer.AddData(Size, pData);
 	}
 
 	for(int Index = 0; Index < g_Index; Index++)
 	{
-		pData = g_pNewData[Index];
-		Size = g_NewDataSize[Index];
-		g_DataWriter.AddData(Size, pData);
+		Writer.AddData(g_aNewImageInfos[Index].DataSize(), g_aNewImageInfos[Index].m_pData);
 	}
 
-	g_DataReader.Close();
-	g_DataWriter.Finish();
+	pMap->Unload();
+	Writer.Finish();
 	return Success ? 0 : -1;
 }

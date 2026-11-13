@@ -1,7 +1,5 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/system.h>
-
 #include "ringbuffer.h"
 
 CRingBufferBase::CItem *CRingBufferBase::NextBlock(CItem *pItem)
@@ -46,34 +44,42 @@ CRingBufferBase::CItem *CRingBufferBase::MergeBack(CItem *pItem)
 
 void CRingBufferBase::Init(void *pMemory, int Size, int Flags)
 {
-	mem_zero(pMemory, Size);
-	m_Size = (Size)/sizeof(CItem)*sizeof(CItem);
-	m_pFirst = (CItem *)pMemory;
+	m_Size = Size / sizeof(CItem) * sizeof(CItem);
+	m_pBuffer = static_cast<CItem *>(pMemory);
+	m_Flags = Flags;
+	Clear();
+}
+
+void CRingBufferBase::Clear()
+{
+	m_pFirst = m_pBuffer;
+	m_pFirst->m_pPrev = nullptr;
+	m_pFirst->m_pNext = nullptr;
 	m_pFirst->m_Free = 1;
 	m_pFirst->m_Size = m_Size;
 	m_pLast = m_pFirst;
 	m_pProduce = m_pFirst;
 	m_pConsume = m_pFirst;
-	m_Flags = Flags;
-
 }
 
 void *CRingBufferBase::Allocate(int Size)
 {
-	int WantedSize = (Size+sizeof(CItem)+sizeof(CItem)-1)/sizeof(CItem)*sizeof(CItem);
-	CItem *pBlock = 0;
+	int WantedSize = (Size + sizeof(CItem) + sizeof(CItem) - 1) / sizeof(CItem) * sizeof(CItem);
+	CItem *pBlock = nullptr;
 
 	// check if we even can fit this block
 	if(WantedSize > m_Size)
-		return 0;
+		return nullptr;
 
-	while(1)
+	while(true)
 	{
 		// check for space
 		if(m_pProduce->m_Free)
 		{
 			if(m_pProduce->m_Size >= WantedSize)
+			{
 				pBlock = m_pProduce;
+			}
 			else
 			{
 				// wrap around to try to find a block
@@ -83,24 +89,28 @@ void *CRingBufferBase::Allocate(int Size)
 		}
 
 		if(pBlock)
+		{
 			break;
+		}
 		else
 		{
 			// we have no block, check our policy and see what todo
-			if(m_Flags&FLAG_RECYCLE)
+			if(m_Flags & FLAG_RECYCLE)
 			{
 				if(!PopFirst())
-					return 0;
+					return nullptr;
 			}
 			else
-				return 0;
+			{
+				return nullptr;
+			}
 		}
 	}
 
 	// okey, we have our block
 
 	// split the block if needed
-	if(pBlock->m_Size > WantedSize+(int)sizeof(CItem))
+	if(pBlock->m_Size > WantedSize + (int)sizeof(CItem))
 	{
 		CItem *pNewItem = (CItem *)((char *)pBlock + WantedSize);
 		pNewItem->m_pPrev = pBlock;
@@ -117,19 +127,28 @@ void *CRingBufferBase::Allocate(int Size)
 			m_pLast = pNewItem;
 	}
 
-
 	// set next block
 	m_pProduce = NextBlock(pBlock);
 
 	// set as used and return the item pointer
 	pBlock->m_Free = 0;
-	return (void *)(pBlock+1);
+	return (void *)(pBlock + 1);
+}
+
+void CRingBufferBase::SetPopCallback(std::function<void(void *pCurrent)> PopCallback)
+{
+	m_PopCallback = std::move(PopCallback);
 }
 
 int CRingBufferBase::PopFirst()
 {
 	if(m_pConsume->m_Free)
 		return 0;
+
+	if(m_PopCallback)
+	{
+		m_PopCallback(m_pConsume + 1);
+	}
 
 	// set the free flag
 	m_pConsume->m_Free = 1;
@@ -151,18 +170,17 @@ int CRingBufferBase::PopFirst()
 	return 1;
 }
 
-
 void *CRingBufferBase::Prev(void *pCurrent)
 {
 	CItem *pItem = ((CItem *)pCurrent) - 1;
 
-	while(1)
+	while(true)
 	{
 		pItem = PrevBlock(pItem);
 		if(pItem == m_pProduce)
-			return 0;
+			return nullptr;
 		if(!pItem->m_Free)
-			return pItem+1;
+			return pItem + 1;
 	}
 }
 
@@ -170,24 +188,24 @@ void *CRingBufferBase::Next(void *pCurrent)
 {
 	CItem *pItem = ((CItem *)pCurrent) - 1;
 
-	while(1)
+	while(true)
 	{
 		pItem = NextBlock(pItem);
 		if(pItem == m_pProduce)
-			return 0;
+			return nullptr;
 		if(!pItem->m_Free)
-			return pItem+1;
+			return pItem + 1;
 	}
 }
 
 void *CRingBufferBase::First()
 {
 	if(m_pConsume->m_Free)
-		return 0;
-	return (void *)(m_pConsume+1);
+		return nullptr;
+	return (void *)(m_pConsume + 1);
 }
 
 void *CRingBufferBase::Last()
 {
-	return Prev(m_pProduce+1);
+	return Prev(m_pProduce + 1);
 }

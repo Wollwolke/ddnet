@@ -3,84 +3,154 @@
 #ifndef BASE_MATH_H
 #define BASE_MATH_H
 
-#include <math.h>
-#include <stdlib.h>
+#include <cmath>
+#include <concepts>
+#include <cstdlib>
+#include <limits>
 
-template <typename T>
-inline T clamp(T val, T min, T max)
+template<typename T>
+concept Numeric = std::integral<T> || std::floating_point<T>;
+
+constexpr float pi = 3.1415926535897932384626433f;
+constexpr float normalized_golden_angle = 137.50776f / 360.0f;
+
+// NaN and floats outside the int range convert to INT_MIN, a plain cast would be undefined
+constexpr int round_truncate(float f)
 {
-	if(val < min)
-		return min;
-	if(val > max)
-		return max;
-	return val;
+	constexpr float imin = (float)std::numeric_limits<int>::min();
+	return f >= imin && f < -imin ? (int)f : std::numeric_limits<int>::min();
 }
 
-inline float sign(float f)
+constexpr int round_to_int(float f)
 {
-	return f<0.0f?-1.0f:1.0f;
-}
-
-inline int round_to_int(float f)
-{
-	if(f > 0)
-		return (int)(f+0.5f);
-	return (int)(f-0.5f);
-}
-
-inline int round_truncate(float f)
-{
-	return (int)f;
-}
-
-inline int round_ceil(float f)
-{
-	return (int)ceilf(f);
+	return f > 0 ? round_truncate(f + 0.5f) : round_truncate(f - 0.5f);
 }
 
 template<typename T, typename TB>
-inline T mix(const T a, const T b, TB amount)
+constexpr T mix(const T a, const T b, TB amount)
 {
-	return a + (b-a)*amount;
+	return a + (b - a) * amount;
 }
 
-inline float frandom() { return rand()/(float)(RAND_MAX); }
+template<typename T, typename TB>
+constexpr T bezier(const T p0, const T p1, const T p2, const T p3, TB amount)
+{
+	// De-Casteljau Algorithm
+	const T c10 = mix(p0, p1, amount);
+	const T c11 = mix(p1, p2, amount);
+	const T c12 = mix(p2, p3, amount);
+
+	const T c20 = mix(c10, c11, amount);
+	const T c21 = mix(c11, c12, amount);
+
+	return mix(c20, c21, amount); // c30
+}
+
+template<typename T, typename TB>
+constexpr T mix_polynomial(const TB time[], const T data[], int samples, TB amount, T init)
+{
+	T result = init;
+	for(int i = 0; i < samples; i++)
+	{
+		T term = data[i];
+		for(int j = 0; j < samples; j++)
+			if(j != i)
+				term = term * (amount - time[j]) / TB(time[i] - time[j]);
+		result += term;
+	}
+	return result;
+}
+
+inline float random_float()
+{
+	return rand() / (float)(RAND_MAX);
+}
+
+inline float random_float(float min, float max)
+{
+	return min + random_float() * (max - min);
+}
+
+inline float random_float(float max)
+{
+	return random_float(0.0f, max);
+}
+
+inline float random_angle()
+{
+	return 2.0f * pi * (rand() / std::nextafter((float)RAND_MAX, std::numeric_limits<float>::max()));
+}
+
+constexpr int fxpscale = 1 << 10;
 
 // float to fixed
-inline int f2fx(float v) { return (int)(v*(float)(1<<10)); }
-inline float fx2f(int v) { return v*(1.0f/(1<<10)); }
-
-inline int gcd(int a, int b)
+constexpr int f2fx(float v)
 {
-	while(b != 0)
-	{
-		int c = a % b;
-		a = b;
-		b = c;
-	}
-	return a;
+	return round_to_int(v * fxpscale);
+}
+constexpr float fx2f(int v)
+{
+	return v / (float)fxpscale;
+}
+
+// int to fixed
+constexpr int i2fx(int v)
+{
+	return v * fxpscale;
+}
+constexpr int fx2i(int v)
+{
+	return v / fxpscale;
 }
 
 class fxp
 {
 	int value;
+
 public:
-	void set(int v) { value = v; }
-	int get() const { return value; }
-	fxp &operator = (int v) { value = v<<10; return *this; }
-	fxp &operator = (float v) { value = (int)(v*(float)(1<<10)); return *this; }
-	operator float() const { return value/(float)(1<<10); }
+	constexpr void set(int v)
+	{
+		value = v;
+	}
+	constexpr int get() const
+	{
+		return value;
+	}
+	constexpr fxp &operator=(int v)
+	{
+		value = i2fx(v);
+		return *this;
+	}
+	constexpr fxp &operator=(float v)
+	{
+		value = f2fx(v);
+		return *this;
+	}
+	constexpr operator int() const
+	{
+		return fx2i(value);
+	}
+	constexpr operator float() const
+	{
+		return fx2f(value);
+	}
 };
 
-const float pi = 3.1415926535897932384626433f;
+template<typename T>
+constexpr T absolute(T a)
+{
+	return a < T(0) ? -a : a;
+}
 
-template <typename T> inline T minimum(T a, T b) { return a<b?a:b; }
-template <typename T> inline T minimum(T a, T b, T c) { return minimum(minimum(a, b), c); }
-template <typename T> inline T maximum(T a, T b) { return a>b?a:b; }
-template <typename T> inline T maximum(T a, T b, T c) { return maximum(maximum(a, b), c); }
-template <typename T> inline T absolute(T a) { return a<T(0)?-a:a; }
-
-template <typename T> inline T in_range(T a, T lower, T upper) { return lower <= a && a <= upper; }
-template <typename T> inline T in_range(T a, T upper) { return in_range(a, 0, upper); }
+template<Numeric T>
+constexpr bool in_range(T a, T lower, T upper)
+{
+	return lower <= a && a <= upper;
+}
+template<Numeric T>
+constexpr bool in_range(T a, T upper)
+{
+	return in_range(a, 0, upper);
+}
 
 #endif // BASE_MATH_H

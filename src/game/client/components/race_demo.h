@@ -5,6 +5,8 @@
 
 #include <game/client/component.h>
 
+#include <chrono>
+
 class CRaceDemo : public CComponent
 {
 	enum
@@ -25,23 +27,26 @@ class CRaceDemo : public CComponent
 	int m_RecordStopTick;
 	int m_Time;
 
-	static int RaceDemolistFetchCallback(const char *pName, time_t Date, int IsDir, int StorageType, void *pUser);
+	std::chrono::nanoseconds m_RaceDemosLoadStartTime{0};
+
+	static int RaceDemolistFetchCallback(const CFsFileInfo *pInfo, int IsDir, int StorageType, void *pUser);
 
 	void GetPath(char *pBuf, int Size, int Time = -1) const;
 
 	void StopRecord(int Time = -1);
-	bool CheckDemo(int Time) const;
+	bool CheckDemo(int Time);
 
 public:
 	bool m_AllowRestart;
 
 	CRaceDemo();
+	int Sizeof() const override { return sizeof(*this); }
 
-	virtual void OnReset();
-	virtual void OnStateChange(int NewState, int OldState);
-	virtual void OnMessage(int MsgType, void *pRawMsg);
-	virtual void OnMapLoad();
-
-	void OnNewSnapshot();
+	void OnReset() override;
+	void OnStateChange(int NewState, int OldState) override;
+	void OnMessage(int MsgType, void *pRawMsg) override;
+	void OnMapLoad() override;
+	void OnShutdown() override;
+	void OnNewSnapshot() override;
 };
 #endif

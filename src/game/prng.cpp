@@ -1,5 +1,8 @@
 #include "prng.h"
 
+#include <base/dbg.h>
+#include <base/str.h>
+
 // From https://en.wikipedia.org/w/index.php?title=Permuted_congruential_generator&oldid=901497400#Example_code.
 //
 // > The generator recommended for most users is PCG-XSH-RR with 64-bit state
@@ -11,7 +14,6 @@ CPrng::CPrng() :
 	m_Seeded(false)
 {
 }
-
 
 const char *CPrng::Description() const
 {
@@ -27,10 +29,12 @@ static unsigned int RotateRight32(unsigned int x, int Shift)
 	return (x >> Shift) | (x << (-Shift & 31));
 }
 
-void CPrng::Seed(uint64 aSeed[2])
+void CPrng::Seed(uint64_t aSeed[2])
 {
 	m_Seeded = true;
-	str_format(m_aDescription, sizeof(m_aDescription), "%s:%016llx:%016llx", NAME, aSeed[0], aSeed[1]);
+	str_format(m_aDescription, sizeof(m_aDescription), "%s:%08x%08x:%08x%08x", NAME,
+		(unsigned)(aSeed[0] >> 32), (unsigned)aSeed[0],
+		(unsigned)(aSeed[1] >> 32), (unsigned)aSeed[1]);
 
 	m_Increment = (aSeed[1] << 1) | 1;
 	m_State = aSeed[0] + m_Increment;
@@ -41,11 +45,11 @@ unsigned int CPrng::RandomBits()
 {
 	dbg_assert(m_Seeded, "prng needs to be seeded before it can generate random numbers");
 
-	uint64 x = m_State;
+	uint64_t x = m_State;
 	unsigned int Count = x >> 59;
 
-	static const uint64 MULTIPLIER = 6364136223846793005u;
-	m_State = x * MULTIPLIER + m_Increment;
+	static const uint64_t s_Multiplier = 6364136223846793005u;
+	m_State = x * s_Multiplier + m_Increment;
 	x ^= x >> 18;
 	return RotateRight32(x >> 27, Count);
 }

@@ -6,36 +6,48 @@
 
 enum
 {
-	TEAM_FLOCK = 0, TEAM_SUPER = MAX_CLIENTS, VANILLA_TEAM_SUPER = VANILLA_MAX_CLIENTS
+	TEAM_FLOCK = 0,
+	TEAM_SUPER = MAX_CLIENTS,
+	NUM_DDRACE_TEAMS = TEAM_SUPER + 1,
+	LEGACY_TEAM_SUPER = LEGACY_MAX_CLIENTS,
+	VANILLA_TEAM_SUPER = VANILLA_MAX_CLIENTS
+};
+
+// do not change the values of the following enum
+enum
+{
+	SV_TEAM_FORBIDDEN = 0, // teams are disabled on the map
+	SV_TEAM_ALLOWED = 1, // teams are enabled on the map, but optional
+	SV_TEAM_MANDATORY = 2, // map must be played with a team
+	SV_TEAM_FORCED_SOLO = 3 // map forces a random team for each individual player
 };
 
 class CTeamsCore
 {
-	int m_Team[MAX_CLIENTS];
-	bool m_IsSolo[MAX_CLIENTS];
+	int m_aTeam[MAX_CLIENTS];
+	bool m_aIsSolo[MAX_CLIENTS];
+
 public:
-	bool m_IsDDRace16;
+	int m_NumDDRaceTeams;
 
-	CTeamsCore(void);
+	CTeamsCore();
 
-	bool SameTeam(int ClientID1, int ClientID2);
+	int TeamSuper() const
+	{
+		return m_NumDDRaceTeams - 1;
+	}
 
-	bool CanKeepHook(int ClientID1, int ClientID2);
-	bool CanCollide(int ClientID1, int ClientID2);
+	bool SameTeam(int ClientId1, int ClientId2) const;
 
-	int Team(int ClientID);
-	void Team(int ClientID, int Team);
+	bool CanKeepHook(int ClientId1, int ClientId2) const;
+	bool CanCollide(int ClientId1, int ClientId2) const;
+
+	int Team(int ClientId) const;
+	void Team(int ClientId, int Team);
 
 	void Reset();
-	void SetSolo(int ClientID, bool Value)
-	{
-		m_IsSolo[ClientID] = Value;
-	}
-
-	bool GetSolo(int ClientID)
-	{
-		return m_IsSolo[ClientID];
-	}
+	void SetSolo(int ClientId, bool Value);
+	bool GetSolo(int ClientId) const;
 };
 
 #endif

@@ -1,15 +1,23 @@
 /* (c) Shereef Marzouk. See "licence DDRace.txt" and the readme.txt in the root of the distribution for more information. */
-#include <engine/config.h>
-#include <engine/server.h>
-#include <game/generated/protocol.h>
-#include <game/server/gamecontext.h>
 #include "light.h"
+
+#include "character.h"
+
+#include <engine/server.h>
+
+#include <generated/protocol.h>
+
 #include <game/mapitems.h>
+#include <game/server/gamecontext.h>
+#include <game/server/player.h>
+#include <game/teamscore.h>
 
 CLight::CLight(CGameWorld *pGameWorld, vec2 Pos, float Rotation, int Length,
-		int Layer, int Number) :
-		CEntity(pGameWorld, CGameWorld::ENTTYPE_LASER)
+	int Layer, int Number) :
+	CEntity(pGameWorld, CGameWorld::ENTTYPE_LASER, true)
 {
+	m_To = vec2(0.0f, 0.0f);
+	m_Core = vec2(0.0f, 0.0f);
 	m_Layer = Layer;
 	m_Number = Number;
 	m_Tick = (Server()->TickSpeed() * 0.15f);
@@ -23,37 +31,32 @@ CLight::CLight(CGameWorld *pGameWorld, vec2 Pos, float Rotation, int Length,
 
 bool CLight::HitCharacter()
 {
-	std::list<CCharacter *> HitCharacters =
-			GameServer()->m_World.IntersectedCharacters(m_Pos, m_To, 0.0f, 0);
-	if (HitCharacters.empty())
+	std::vector<CCharacter *> vpHitCharacters = GameServer()->m_World.IntersectedCharacters(m_Pos, m_To, 0.0f, nullptr);
+	if(vpHitCharacters.empty())
 		return false;
-	for (std::list<CCharacter *>::iterator i = HitCharacters.begin();
-			i != HitCharacters.end(); i++)
+	for(auto *pChar : vpHitCharacters)
 	{
-		CCharacter * Char = *i;
-		if (m_Layer == LAYER_SWITCH
-				&& !GameServer()->Collision()->m_pSwitchers[m_Number].m_Status[Char->Team()])
+		if(m_Layer == LAYER_SWITCH && m_Number > 0 && !Switchers()[m_Number].m_aStatus[pChar->Team()])
 			continue;
-		Char->Freeze();
+		pChar->Freeze();
 	}
 	return true;
 }
 
 void CLight::Move()
 {
-	if (m_Speed != 0)
+	if(m_Speed != 0)
 	{
-		if ((m_CurveLength >= m_Length && m_Speed > 0)
-				|| (m_CurveLength <= 0 && m_Speed < 0))
+		if((m_CurveLength >= m_Length && m_Speed > 0) || (m_CurveLength <= 0 && m_Speed < 0))
 			m_Speed = -m_Speed;
 		m_CurveLength += m_Speed * m_Tick + m_LengthL;
 		m_LengthL = 0;
-		if (m_CurveLength > m_Length)
+		if(m_CurveLength > m_Length)
 		{
 			m_LengthL = m_CurveLength - m_Length;
 			m_CurveLength = m_Length;
 		}
-		else if (m_CurveLength < 0)
+		else if(m_CurveLength < 0)
 		{
 			m_LengthL = 0 + m_CurveLength;
 			m_CurveLength = 0;
@@ -61,103 +64,80 @@ void CLight::Move()
 	}
 
 	m_Rotation += m_AngularSpeed * m_Tick;
-	if (m_Rotation > pi * 2)
+	if(m_Rotation > pi * 2)
 		m_Rotation -= pi * 2;
-	else if (m_Rotation < 0)
+	else if(m_Rotation < 0)
 		m_Rotation += pi * 2;
 }
 
 void CLight::Step()
 {
 	Move();
-	vec2 dir(sin(m_Rotation), cos(m_Rotation));
-	vec2 to2 = m_Pos + normalize(dir) * m_CurveLength;
-	GameServer()->Collision()->IntersectNoLaser(m_Pos, to2, &m_To, 0);
+	const vec2 Direction = vec2(std::sin(m_Rotation), std::cos(m_Rotation));
+	const vec2 NextPosition = m_Pos + normalize(Direction) * m_CurveLength;
+	GameServer()->Collision()->IntersectNoLaser(m_Pos, NextPosition, &m_To, nullptr);
 }
 
 void CLight::Reset()
 {
-	GameServer()->m_World.DestroyEntity(this);
+	m_MarkedForDestroy = true;
 }
 
 void CLight::Tick()
 {
-
-	if (Server()->Tick() % int(Server()->TickSpeed() * 0.15f) == 0)
+	if(Server()->Tick() % (int)(Server()->TickSpeed() * 0.15f) == 0)
 	{
-		int Flags;
 		m_EvalTick = Server()->Tick();
-		int index = GameServer()->Collision()->IsMover(m_Pos.x, m_Pos.y,
-				&Flags);
-		if (index)
-		{
-			m_Core = GameServer()->Collision()->CpSpeed(index, Flags);
-		}
+		GameServer()->Collision()->MoverSpeed(m_Pos.x, m_Pos.y, &m_Core);
 		m_Pos += m_Core;
 		Step();
 	}
 
 	HitCharacter();
-	return;
-
 }
 
 void CLight::Snap(int SnappingClient)
 {
-	if (NetworkClipped(SnappingClient, m_Pos)
-			&& NetworkClipped(SnappingClient, m_To))
+	if((NetworkClipped(SnappingClient, m_Pos) && NetworkClipped(SnappingClient, m_To)) || !GetId().has_value())
 		return;
 
-	CCharacter *Char = GameServer()->GetPlayerChar(SnappingClient);
+	int SnappingClientVersion = GameServer()->GetClientVersion(SnappingClient);
 
-	if(SnappingClient > -1 && (GameServer()->m_apPlayers[SnappingClient]->GetTeam() == -1
-				|| GameServer()->m_apPlayers[SnappingClient]->IsPaused())
-			&& GameServer()->m_apPlayers[SnappingClient]->m_SpectatorID != SPEC_FREEVIEW)
-		Char = GameServer()->GetPlayerChar(GameServer()->m_apPlayers[SnappingClient]->m_SpectatorID);
+	CCharacter *pChr = GameServer()->GetPlayerChar(SnappingClient);
 
-	int Tick = (Server()->Tick() % Server()->TickSpeed()) % 6;
+	if(SnappingClient != SERVER_DEMO_CLIENT && (GameServer()->m_apPlayers[SnappingClient]->GetTeam() == TEAM_SPECTATORS || GameServer()->m_apPlayers[SnappingClient]->IsPaused()) && GameServer()->m_apPlayers[SnappingClient]->SpectatorId() != SPEC_FREEVIEW)
+		pChr = GameServer()->GetPlayerChar(GameServer()->m_apPlayers[SnappingClient]->SpectatorId());
 
-	if (Char && Char->IsAlive()
-			&& m_Layer == LAYER_SWITCH
-			&& !GameServer()->Collision()->m_pSwitchers[m_Number].m_Status[Char->Team()]
-			&& (Tick))
-		return;
+	vec2 From = m_Pos;
+	int StartTick = -1;
 
-	CNetObj_Laser *pObj = static_cast<CNetObj_Laser *>(Server()->SnapNewItem(
-			NETOBJTYPE_LASER, m_ID, sizeof(CNetObj_Laser)));
-
-	if (!pObj)
-		return;
-
-	pObj->m_X = (int)m_Pos.x;
-	pObj->m_Y = (int)m_Pos.y;
-
-	if (Char && Char->Team() == TEAM_SUPER)
+	if(pChr && pChr->Team() == TEAM_SUPER)
 	{
-		pObj->m_FromX = (int)m_Pos.x;
-		pObj->m_FromY = (int)m_Pos.y;
+		From = m_Pos;
 	}
-	else if (Char && m_Layer == LAYER_SWITCH
-			&& GameServer()->Collision()->m_pSwitchers[m_Number].m_Status[Char->Team()])
+	else if(pChr && m_Layer == LAYER_SWITCH && m_Number > 0 && Switchers()[m_Number].m_aStatus[pChr->Team()])
 	{
-		pObj->m_FromX = (int)m_To.x;
-		pObj->m_FromY = (int)m_To.y;
+		From = m_To;
 	}
-	else if (m_Layer != LAYER_SWITCH)
+	// light on game and switch layer with a number 0 is always on
+	else if(m_Layer != LAYER_SWITCH || (m_Layer == LAYER_SWITCH && m_Number == 0))
 	{
-		pObj->m_FromX = (int)m_To.x;
-		pObj->m_FromY = (int)m_To.y;
-	}
-	else
-	{
-		pObj->m_FromX = (int)m_Pos.x;
-		pObj->m_FromY = (int)m_Pos.y;
+		From = m_To;
 	}
 
-	int StartTick = m_EvalTick;
-	if (StartTick < Server()->Tick() - 4)
-		StartTick = Server()->Tick() - 4;
-	else if (StartTick > Server()->Tick())
-		StartTick = Server()->Tick();
-	pObj->m_StartTick = StartTick;
+	if(SnappingClientVersion < VERSION_DDNET_ENTITY_NETOBJS)
+	{
+		int Tick = (Server()->Tick() % Server()->TickSpeed()) % 6;
+		if(pChr && pChr->IsAlive() && m_Layer == LAYER_SWITCH && m_Number > 0 && !Switchers()[m_Number].m_aStatus[pChr->Team()] && Tick)
+			return;
+
+		StartTick = m_EvalTick;
+		if(StartTick < Server()->Tick() - 4)
+			StartTick = Server()->Tick() - 4;
+		else if(StartTick > Server()->Tick())
+			StartTick = Server()->Tick();
+	}
+
+	GameServer()->SnapLaserObject(CSnapContext(SnappingClientVersion, Server()->IsSixup(SnappingClient), SnappingClient), GetId().value(),
+		m_Pos, From, StartTick, -1, LASERTYPE_FREEZE, 0, m_Number);
 }

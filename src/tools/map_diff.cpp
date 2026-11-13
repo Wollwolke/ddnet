@@ -1,117 +1,222 @@
-#include <game/mapitems.h>
-#include <game/gamecore.h>
-#include <base/system.h>
-#include <engine/shared/datafile.h>
+#include <base/io.h>
+#include <base/logger.h>
+#include <base/os.h>
+#include <base/str.h>
+
+#include <engine/map.h>
 #include <engine/storage.h>
 
-#include <pnglite.h>
+#include <game/gamecore.h>
+#include <game/mapitems.h>
 
-bool Process(IStorage *pStorage, char **pMapNames)
+#include <cstdlib>
+#include <memory>
+
+static constexpr const char *const TOOL_NAME = "map_diff";
+
+static int TileDataIndex(const CMapItemLayerTilemap *pTilemap, int PhysicsLayerFlags)
 {
-	CDataFileReader Maps[2];
+	if(PhysicsLayerFlags & TILESLAYERFLAG_TELE)
+		return pTilemap->m_Tele;
+	if(PhysicsLayerFlags & TILESLAYERFLAG_SPEEDUP)
+		return pTilemap->m_Speedup;
+	if(PhysicsLayerFlags & TILESLAYERFLAG_FRONT)
+		return pTilemap->m_Front;
+	if(PhysicsLayerFlags & TILESLAYERFLAG_SWITCH)
+		return pTilemap->m_Switch;
+	if(PhysicsLayerFlags & TILESLAYERFLAG_TUNE)
+		return pTilemap->m_Tune;
+	return pTilemap->m_Data;
+}
+
+template<typename T, typename FCompare>
+static bool DiffTileLayer(std::shared_ptr<IMap> apMaps[2], const char *apMapNames[2], const int aData[2], int Width, int Height, FCompare pfnCompare)
+{
+	const T *apTile[2];
+	for(int i = 0; i < 2; ++i)
+	{
+		apTile[i] = (const T *)apMaps[i]->GetData(aData[i]);
+	}
+
+	if(apTile[0] == nullptr || apTile[1] == nullptr)
+	{
+		for(int i = 0; i < 2; ++i)
+		{
+			if(apTile[i] == nullptr)
+				log_error(TOOL_NAME, "invalid tile layer data in \"%s\"", apMapNames[i]);
+		}
+		for(int i = 0; i < 2; ++i)
+			apMaps[i]->UnloadData(aData[i]);
+		// Layers that are invalid in both maps are ignored
+		return apTile[0] == apTile[1];
+	}
+
+	for(int y = 0; y < Height; y++)
+	{
+		for(int x = 0; x < Width; x++)
+		{
+			const int Pos = y * Width + x;
+			pfnCompare(apTile[0][Pos], apTile[1][Pos], x, y);
+		}
+	}
+
+	for(int i = 0; i < 2; ++i)
+		apMaps[i]->UnloadData(aData[i]);
+	return true;
+}
+
+static bool Process(IStorage *pStorage, const char *apMapNames[2])
+{
+	std::shared_ptr<IMap> apMaps[2];
 
 	for(int i = 0; i < 2; ++i)
 	{
-		if(!Maps[i].Open(pStorage, pMapNames[i], IStorage::TYPE_ABSOLUTE))
+		apMaps[i] = CreateMap();
+
+		if(!apMaps[i]->Load(pStorage, apMapNames[i], IStorage::TYPE_ABSOLUTE))
 		{
-			dbg_msg("map_compare", "error opening map '%s'", pMapNames[i]);
+			log_error(TOOL_NAME, "error opening map '%s'", apMapNames[i]);
 			return false;
 		}
-
-		CDataFileReader *pMap = &Maps[i];
-		// check version
-		CMapItemVersion *pVersion = (CMapItemVersion *)pMap->FindItem(MAPITEMTYPE_VERSION, 0);
-		if(pVersion && pVersion->m_Version != 1)
-			return false;
 	}
 
-	int Start[2], Num[2];
-
-	Maps[0].GetType(MAPITEMTYPE_LAYER, &Start[0], &Num[0]);
-	Maps[1].GetType(MAPITEMTYPE_LAYER, &Start[1], &Num[1]);
+	int aStart[2], aLayersNum[2];
+	for(int i = 0; i < 2; ++i)
+		apMaps[i]->GetType(MAPITEMTYPE_LAYER, &aStart[i], &aLayersNum[i]);
 
 	// ensure basic layout
-	if(Num[0] != Num[1])
+	if(aLayersNum[0] != aLayersNum[1])
 	{
-		dbg_msg("map_compare", "different layer numbers:");
+		log_info(TOOL_NAME, "different layer numbers:");
 		for(int i = 0; i < 2; ++i)
-			dbg_msg("map_compare", "  \"%s\": %d layers", pMapNames[i], Num[i]);
+			log_info(TOOL_NAME, "  \"%s\": %d layers", apMapNames[i], aLayersNum[i]);
 		return false;
 	}
 
-	// preload data
-	for(int j = 0; j < Num[0]; ++j)
-	{
-		CMapItemLayer *pItem[2];
-		CMapItemLayerTilemap *pTilemap[2];
-		for(int i = 0; i < 2; ++i)
-		{
-			pItem[i] = (CMapItemLayer *)Maps[i].GetItem(Start[i]+j, 0, 0);
-			pTilemap[i] = (CMapItemLayerTilemap *)pItem[i];
-			(void)(CTile *)Maps[i].GetData(pTilemap[i]->m_Data);
-		}
-	}
-
 	// compare
-	for(int j = 0; j < Num[0]; ++j)
+	for(int j = 0; j < aLayersNum[0]; ++j)
 	{
-		CMapItemLayer *pItem[2];
+		CMapItemLayer *apItem[2];
 		for(int i = 0; i < 2; ++i)
-			pItem[i] = (CMapItemLayer *)Maps[i].GetItem(Start[i]+j, 0, 0);
+			apItem[i] = (CMapItemLayer *)apMaps[i]->GetItem(aStart[i] + j);
 
-		if(pItem[0]->m_Type != LAYERTYPE_TILES)
+		if(apItem[0]->m_Type != LAYERTYPE_TILES || apItem[1]->m_Type != LAYERTYPE_TILES)
 			continue;
 
-		CMapItemLayerTilemap *pTilemap[2];
-		char aName[2][16];
+		CMapItemLayerTilemap *apTilemap[2];
+		char aaName[2][sizeof(CMapItemLayerTilemap{}.m_aName)];
 
 		for(int i = 0; i < 2; ++i)
 		{
-			pTilemap[i] = (CMapItemLayerTilemap *)pItem[i];
-			IntsToStr(pTilemap[i]->m_aName, sizeof(pTilemap[i]->m_aName)/sizeof(int), aName[i]);
+			apTilemap[i] = (CMapItemLayerTilemap *)apItem[i];
+			IntsToStr(apTilemap[i]->m_aName, std::size(apTilemap[i]->m_aName), aaName[i], std::size(aaName[i]));
 		}
 
-		if(str_comp(aName[0], aName[1]) != 0 || pTilemap[0]->m_Width != pTilemap[1]->m_Width || pTilemap[0]->m_Height != pTilemap[1]->m_Height)
+		const int PhysicsLayerFlags = TILESLAYERFLAG_TELE | TILESLAYERFLAG_SPEEDUP | TILESLAYERFLAG_FRONT | TILESLAYERFLAG_SWITCH | TILESLAYERFLAG_TUNE;
+		if(str_comp(aaName[0], aaName[1]) != 0 ||
+			apTilemap[0]->m_Width != apTilemap[1]->m_Width ||
+			apTilemap[0]->m_Height != apTilemap[1]->m_Height ||
+			(apTilemap[0]->m_Flags & PhysicsLayerFlags) != (apTilemap[1]->m_Flags & PhysicsLayerFlags))
 		{
-			dbg_msg("map_compare", "different tile layers:");
+			log_info(TOOL_NAME, "different tile layers:");
 			for(int i = 0; i < 2; ++i)
-				dbg_msg("map_compare", "  \"%s\" (%dx%d)", aName[i], pTilemap[i]->m_Width, pTilemap[i]->m_Height);
+				log_info(TOOL_NAME, " [%d:%s] (%dx%d, flags: %d)", j, aaName[i], apTilemap[i]->m_Width, apTilemap[i]->m_Height, apTilemap[i]->m_Flags);
 			return false;
 		}
-		CTile *pTile[2];
-		for(int i = 0; i < 2; ++i)
-			pTile[i] = (CTile *)Maps[i].GetData(pTilemap[i]->m_Data);
 
-		for(int y = 0; y < pTilemap[0]->m_Height; y++)
+		const int Width = apTilemap[0]->m_Width;
+		const int Height = apTilemap[0]->m_Height;
+		const int Flags = apTilemap[0]->m_Flags & PhysicsLayerFlags;
+		const int aData[2] = {TileDataIndex(apTilemap[0], Flags), TileDataIndex(apTilemap[1], Flags)};
+		bool Ok;
+		if(Flags & TILESLAYERFLAG_TELE)
 		{
-			for(int x = 0; x < pTilemap[0]->m_Width; x++)
-			{
-				int pos = y * pTilemap[0]->m_Width + x;
-				if(pTile[0][pos].m_Index != pTile[1][pos].m_Index || pTile[0][pos].m_Flags != pTile[1][pos].m_Flags)
+			Ok = DiffTileLayer<CTeleTile>(apMaps, apMapNames, aData, Width, Height, [&](const CTeleTile &Tile0, const CTeleTile &Tile1, int x, int y) {
+				if(Tile0.m_Number != Tile1.m_Number || Tile0.m_Type != Tile1.m_Type)
 				{
-					dbg_msg("map_compare", "[%d:%s] %dx%d: (index: %d, flags: %d) != (index: %d, flags: %d)", Num[0], aName[0], x, y, pTile[0][pos].m_Index, pTile[0][pos].m_Flags, pTile[1][pos].m_Index, pTile[0][pos].m_Flags);
+					log_info(TOOL_NAME, "[%d:%s] %dx%d: (number: %d, type: %d) != (number: %d, type: %d)",
+						aLayersNum[0], aaName[0], x, y, Tile0.m_Number, Tile0.m_Type, Tile1.m_Number, Tile1.m_Type);
 				}
-			}
+			});
 		}
+		else if(Flags & TILESLAYERFLAG_SPEEDUP)
+		{
+			Ok = DiffTileLayer<CSpeedupTile>(apMaps, apMapNames, aData, Width, Height, [&](const CSpeedupTile &Tile0, const CSpeedupTile &Tile1, int x, int y) {
+				if(Tile0.m_Force != Tile1.m_Force || Tile0.m_MaxSpeed != Tile1.m_MaxSpeed || Tile0.m_Type != Tile1.m_Type || Tile0.m_Angle != Tile1.m_Angle)
+				{
+					log_info(TOOL_NAME, "[%d:%s] %dx%d: (force: %d, maxspeed: %d, angle: %d, type: %d) != (force: %d, maxspeed: %d, angle: %d, type: %d)",
+						aLayersNum[0], aaName[0], x, y, Tile0.m_Force, Tile0.m_MaxSpeed, Tile0.m_Angle, Tile0.m_Type, Tile1.m_Force, Tile1.m_MaxSpeed, Tile1.m_Angle, Tile1.m_Type);
+				}
+			});
+		}
+		else if(Flags & TILESLAYERFLAG_SWITCH)
+		{
+			Ok = DiffTileLayer<CSwitchTile>(apMaps, apMapNames, aData, Width, Height, [&](const CSwitchTile &Tile0, const CSwitchTile &Tile1, int x, int y) {
+				if(Tile0.m_Number != Tile1.m_Number || Tile0.m_Type != Tile1.m_Type || Tile0.m_Flags != Tile1.m_Flags || Tile0.m_Delay != Tile1.m_Delay)
+				{
+					log_info(TOOL_NAME, "[%d:%s] %dx%d: (number: %d, type: %d, flags: %d, delay: %d) != (number: %d, type: %d, flags: %d, delay: %d)",
+						aLayersNum[0], aaName[0], x, y, Tile0.m_Number, Tile0.m_Type, Tile0.m_Flags, Tile0.m_Delay, Tile1.m_Number, Tile1.m_Type, Tile1.m_Flags, Tile1.m_Delay);
+				}
+			});
+		}
+		else if(Flags & TILESLAYERFLAG_TUNE)
+		{
+			Ok = DiffTileLayer<CTuneTile>(apMaps, apMapNames, aData, Width, Height, [&](const CTuneTile &Tile0, const CTuneTile &Tile1, int x, int y) {
+				if(Tile0.m_Number != Tile1.m_Number || Tile0.m_Type != Tile1.m_Type)
+				{
+					log_info(TOOL_NAME, "[%d:%s] %dx%d: (number: %d, type: %d) != (number: %d, type: %d)",
+						aLayersNum[0], aaName[0], x, y, Tile0.m_Number, Tile0.m_Type, Tile1.m_Number, Tile1.m_Type);
+				}
+			});
+		}
+		else
+		{
+			// Regular, game and front layers all store CTile
+			Ok = DiffTileLayer<CTile>(apMaps, apMapNames, aData, Width, Height, [&](const CTile &Tile0, const CTile &Tile1, int x, int y) {
+				if(Tile0.m_Index != Tile1.m_Index || Tile0.m_Flags != Tile1.m_Flags)
+				{
+					log_info(TOOL_NAME, "[%d:%s] %dx%d: (index: %d, flags: %d) != (index: %d, flags: %d)",
+						aLayersNum[0], aaName[0], x, y, Tile0.m_Index, Tile0.m_Flags, Tile1.m_Index, Tile1.m_Flags);
+				}
+			});
+		}
+
+		if(!Ok)
+			return false;
 	}
 
 	return true;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, const char *argv[])
 {
-	dbg_logger_stdout();
-	dbg_logger_file("map_diff.txt");
-
-	IStorage *pStorage = CreateLocalStorage();
-
-	if(argc == 3)
+	CCmdlineFix CmdlineFix(&argc, &argv);
+	std::vector<std::shared_ptr<ILogger>> vpLoggers;
+	std::shared_ptr<ILogger> pStdoutLogger = std::shared_ptr<ILogger>(log_logger_stdout());
+	if(pStdoutLogger)
 	{
-		return Process(pStorage, &argv[1]) ? 0 : 1;
+		vpLoggers.push_back(pStdoutLogger);
 	}
-	else
+	IOHANDLE LogFile = io_open("map_diff.txt", IOFLAG_WRITE);
+	if(LogFile)
 	{
-		dbg_msg("usage", "%s map1 map2", argv[0]);
+		vpLoggers.push_back(std::shared_ptr<ILogger>(log_logger_file(LogFile)));
+	}
+	log_set_global_logger(log_logger_collection(std::move(vpLoggers)).release());
+
+	if(argc != 3)
+	{
+		log_error(TOOL_NAME, "Usage: %s map1 map2", argc > 0 ? argv[0] : TOOL_NAME);
 		return -1;
 	}
+
+	std::unique_ptr<IStorage> pStorage = CreateLocalStorage();
+	if(!pStorage)
+	{
+		log_error(TOOL_NAME, "Error creating local storage");
+		return -1;
+	}
+
+	const char *apMapNames[] = {argv[1], argv[2]};
+	return Process(pStorage.get(), apMapNames) ? 0 : 1;
 }

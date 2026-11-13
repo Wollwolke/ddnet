@@ -3,54 +3,63 @@
 #ifndef GAME_SERVER_ENTITIES_PROJECTILE_H
 #define GAME_SERVER_ENTITIES_PROJECTILE_H
 
+#include <game/server/entity.h>
+
 class CProjectile : public CEntity
 {
 public:
-	CProjectile
-	(
+	CProjectile(
 		CGameWorld *pGameWorld,
 		int Type,
 		int Owner,
 		vec2 Pos,
 		vec2 Dir,
 		int Span,
-		bool Freeeze,
+		bool Freeze,
 		bool Explosive,
-		float Force,
 		int SoundImpact,
+		vec2 InitDir,
 		int Layer = 0,
-		int Number = 0
-	);
+		int Number = 0);
 
 	vec2 GetPos(float Time);
-	void FillInfo(CNetObj_Projectile *pProj);
 
-	virtual void Reset();
-	virtual void Tick();
-	virtual void TickPaused();
-	virtual void Snap(int SnappingClient);
+	CNetObj_Projectile NetInfoVanilla() const;
+	bool NetIsInfoLegacyCompatible() const;
+	CNetObj_DDRaceProjectile NetInfoLegacy(int SnappingClient);
+	CNetObj_DDNetProjectile NetInfo(int SnappingClient);
+
+	void Reset() override;
+	void Tick() override;
+	void TickPaused() override;
+	void Snap(int SnappingClient) override;
+	void SwapClients(int Client1, int Client2) override;
 
 private:
 	vec2 m_Direction;
 	int m_LifeSpan;
 	int m_Owner;
 	int m_Type;
-	//int m_Damage;
 	int m_SoundImpact;
-	float m_Force;
 	int m_StartTick;
 	bool m_Explosive;
 
 	// DDRace
 
+	CClientMask m_TeamMask;
 	int m_Bouncing;
 	bool m_Freeze;
 	int m_TuneZone;
+	bool m_BelongsToPracticeTeam;
+	int m_DDRaceTeam;
+	bool m_IsSolo;
+	vec2 m_InitDir;
 
 public:
-
 	void SetBouncing(int Value);
-	void FillExtraInfo(CNetObj_Projectile *pProj);
+
+	bool CanCollide(int ClientId) override;
+	int GetOwnerId() const override { return m_Owner; }
 };
 
 #endif

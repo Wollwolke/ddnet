@@ -1,100 +1,155 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/system.h>
 #include "network.h"
 
-bool CNetClient::Open(NETADDR BindAddr, int Flags)
+#include <base/dbg.h>
+#include <base/mem.h>
+#include <base/net.h>
+#include <base/time.h>
+#include <base/types.h>
+
+#include <engine/shared/protocol7.h>
+
+bool CNetClient::Open(NETADDR BindAddr)
 {
 	// open socket
 	NETSOCKET Socket;
 	Socket = net_udp_create(BindAddr);
-	if(!Socket.type)
+	if(!Socket)
 		return false;
-
+	Close();
 	// clean it
-	mem_zero(this, sizeof(*this));
+	*this = CNetClient{};
 
 	// init
 	m_Socket = Socket;
+	m_pStun = new CStun(m_Socket);
 	m_Connection.Init(m_Socket, false);
-	net_init_mmsgs(&m_MMSGS);
+	m_TokenCache.Init(m_Socket);
 
 	return true;
 }
 
-int CNetClient::Close()
+void CNetClient::Close()
 {
-	// TODO: implement me
-	return 0;
+	if(!m_Socket)
+	{
+		return;
+	}
+	if(m_pStun)
+	{
+		delete m_pStun;
+		m_pStun = nullptr;
+	}
+	net_udp_close(m_Socket);
+	m_Socket = nullptr;
 }
 
-
-int CNetClient::Disconnect(const char *pReason)
+void CNetClient::Disconnect(const char *pReason)
 {
-	//dbg_msg("netclient", "disconnected. reason=\"%s\"", pReason);
 	m_Connection.Disconnect(pReason);
-	return 0;
 }
 
-int CNetClient::Update()
+void CNetClient::Update()
 {
 	m_Connection.Update();
-	if(m_Connection.State() == NET_CONNSTATE_ERROR)
+	if(m_Connection.State() == CNetConnection::EState::ERROR)
 		Disconnect(m_Connection.ErrorString());
-	return 0;
+	m_pStun->Update();
+	m_TokenCache.Update();
 }
 
-int CNetClient::Connect(NETADDR *pAddr)
+void CNetClient::Connect(const NETADDR *pAddr, int NumAddrs)
 {
-	m_Connection.Connect(pAddr);
-	return 0;
+	m_Connection.Connect(pAddr, NumAddrs);
 }
 
-int CNetClient::ResetErrorString()
+void CNetClient::Connect7(const NETADDR *pAddr, int NumAddrs)
+{
+	m_Connection.Connect7(pAddr, NumAddrs);
+}
+
+void CNetClient::ResetErrorString()
 {
 	m_Connection.ResetErrorString();
-	return 0;
 }
 
-int CNetClient::Recv(CNetChunk *pChunk)
+int CNetClient::Recv(CNetChunk *pChunk, SECURITY_TOKEN *pResponseToken, bool Sixup)
 {
-	while(1)
+	while(true)
 	{
-		// check for a chunk
-		if(m_RecvUnpacker.FetchChunk(pChunk))
-			return 1;
+		// Unpack next chunk from stored packet if available
+		if(m_PacketChunkUnpacker.UnpackNextChunk(pChunk))
+		{
+			// Only return the pending packet if the peer is still
+			// available, the caller might have dropped them in
+			// response to the previous chunk.
+			if(m_Connection.State() != CNetConnection::EState::OFFLINE)
+			{
+				return 1;
+			}
+			else
+			{
+				m_PacketChunkUnpacker.Reset();
+			}
+		}
 
 		// TODO: empty the recvinfo
 		NETADDR Addr;
 		unsigned char *pData;
-		int Bytes = net_udp_recv(m_Socket, &Addr, m_RecvUnpacker.m_aBuffer, NET_MAX_PACKETSIZE, &m_MMSGS, &pData);
+		int Bytes = net_udp_recv(m_Socket, &Addr, &pData);
 
 		// no more packets for now
 		if(Bytes <= 0)
 			break;
 
-		bool Sixup = false;
-		if(CNetBase::UnpackPacket(pData, Bytes, &m_RecvUnpacker.m_Data, Sixup) == 0)
+		if(m_pStun->OnPacket(Addr, pData, Bytes))
 		{
-			if(m_RecvUnpacker.m_Data.m_Flags&NET_PACKETFLAG_CONNLESS)
+			continue;
+		}
+
+		SECURITY_TOKEN Token;
+		if(CNetBase::UnpackPacket(pData, Bytes, &m_RecvBuffer, Sixup, true, &Token, pResponseToken) == 0)
+		{
+			if(Sixup)
+			{
+				Addr.type |= NETTYPE_TW7;
+			}
+			if(m_RecvBuffer.m_Flags & NET_PACKETFLAG_CONNLESS)
 			{
 				pChunk->m_Flags = NETSENDFLAG_CONNLESS;
-				pChunk->m_ClientID = -1;
+				pChunk->m_ClientId = -1;
 				pChunk->m_Address = Addr;
-				pChunk->m_DataSize = m_RecvUnpacker.m_Data.m_DataSize;
-				pChunk->m_pData = m_RecvUnpacker.m_Data.m_aChunkData;
-				if(m_RecvUnpacker.m_Data.m_Flags&NET_PACKETFLAG_EXTENDED)
+				pChunk->m_DataSize = m_RecvBuffer.m_DataSize;
+				pChunk->m_pData = m_RecvBuffer.m_aChunkData;
+				if(m_RecvBuffer.m_Flags & NET_PACKETFLAG_EXTENDED)
 				{
 					pChunk->m_Flags |= NETSENDFLAG_EXTENDED;
-					mem_copy(pChunk->m_aExtraData, m_RecvUnpacker.m_Data.m_aExtraData, sizeof(pChunk->m_aExtraData));
+					mem_copy(pChunk->m_aExtraData, m_RecvBuffer.m_aExtraData, sizeof(pChunk->m_aExtraData));
 				}
 				return 1;
 			}
 			else
 			{
-				if(m_Connection.State() != NET_CONNSTATE_OFFLINE && m_Connection.State() != NET_CONNSTATE_ERROR && net_addr_comp(m_Connection.PeerAddress(), &Addr) == 0
-					&& m_Connection.Feed(&m_RecvUnpacker.m_Data, &Addr))
-					m_RecvUnpacker.Start(&Addr, &m_Connection, 0);
+				const bool Control = (m_RecvBuffer.m_Flags & NET_PACKETFLAG_CONTROL) != 0;
+				if(Sixup &&
+					Control &&
+					m_RecvBuffer.m_DataSize >= 1 + (int)sizeof(SECURITY_TOKEN) &&
+					m_RecvBuffer.m_aChunkData[0] == protocol7::NET_CTRLMSG_TOKEN)
+				{
+					m_TokenCache.AddToken(&Addr, *pResponseToken);
+				}
+				if(m_Connection.State() != CNetConnection::EState::OFFLINE &&
+					m_Connection.State() != CNetConnection::EState::ERROR &&
+					m_Connection.Feed(&m_RecvBuffer, &Addr, Token, *pResponseToken))
+				{
+					if(!Control &&
+						m_RecvBuffer.m_DataSize > 0 &&
+						m_RecvBuffer.m_NumChunks > 0)
+					{
+						m_PacketChunkUnpacker.FeedPacket(Addr, m_RecvBuffer, &m_Connection, 0);
+					}
+				}
 			}
 		}
 	}
@@ -103,29 +158,32 @@ int CNetClient::Recv(CNetChunk *pChunk)
 
 int CNetClient::Send(CNetChunk *pChunk)
 {
-	if(pChunk->m_DataSize >= NET_MAX_PAYLOAD)
-	{
-		dbg_msg("netclient", "chunk payload too big. %d. dropping chunk", pChunk->m_DataSize);
-		return -1;
-	}
+	pChunk->AssertSizeSanity();
 
-	if(pChunk->m_Flags&NETSENDFLAG_CONNLESS)
+	if(pChunk->m_Flags & NETSENDFLAG_CONNLESS)
 	{
 		// send connectionless packet
-		CNetBase::SendPacketConnless(m_Socket, &pChunk->m_Address, pChunk->m_pData, pChunk->m_DataSize,
-				pChunk->m_Flags&NETSENDFLAG_EXTENDED, pChunk->m_aExtraData);
+		if(pChunk->m_Address.type & NETTYPE_TW7)
+		{
+			m_TokenCache.SendPacketConnless(pChunk);
+		}
+		else
+		{
+			CNetBase::SendPacketConnless(m_Socket, &pChunk->m_Address, pChunk->m_pData, pChunk->m_DataSize,
+				pChunk->m_Flags & NETSENDFLAG_EXTENDED, pChunk->m_aExtraData);
+		}
 	}
 	else
 	{
 		int Flags = 0;
-		dbg_assert(pChunk->m_ClientID == 0, "errornous client id");
+		dbg_assert(pChunk->m_ClientId == 0, "erroneous client id");
 
-		if(pChunk->m_Flags&NETSENDFLAG_VITAL)
+		if(pChunk->m_Flags & NETSENDFLAG_VITAL)
 			Flags = NET_CHUNKFLAG_VITAL;
 
 		m_Connection.QueueChunk(Flags, pChunk->m_DataSize, pChunk->m_pData);
 
-		if(pChunk->m_Flags&NETSENDFLAG_FLUSH)
+		if(pChunk->m_Flags & NETSENDFLAG_FLUSH)
 			m_Connection.Flush();
 	}
 	return 0;
@@ -133,9 +191,9 @@ int CNetClient::Send(CNetChunk *pChunk)
 
 int CNetClient::State()
 {
-	if(m_Connection.State() == NET_CONNSTATE_ONLINE)
+	if(m_Connection.State() == CNetConnection::EState::ONLINE)
 		return NETSTATE_ONLINE;
-	if(m_Connection.State() == NET_CONNSTATE_OFFLINE)
+	if(m_Connection.State() == CNetConnection::EState::OFFLINE)
 		return NETSTATE_OFFLINE;
 	return NETSTATE_CONNECTING;
 }
@@ -145,14 +203,27 @@ int CNetClient::Flush()
 	return m_Connection.Flush();
 }
 
-int CNetClient::GotProblems()
+bool CNetClient::GotProblems(int64_t MaxLatency) const
 {
-	if(time_get() - m_Connection.LastRecvTime() > time_freq())
-		return 1;
-	return 0;
+	return time_get() - m_Connection.LastRecvTime() > MaxLatency;
 }
 
-const char *CNetClient::ErrorString()
+const char *CNetClient::ErrorString() const
 {
 	return m_Connection.ErrorString();
+}
+
+void CNetClient::FeedStunServer(NETADDR StunServer)
+{
+	m_pStun->FeedStunServer(StunServer);
+}
+
+void CNetClient::RefreshStun()
+{
+	m_pStun->Refresh();
+}
+
+CONNECTIVITY CNetClient::GetConnectivity(int NetType, NETADDR *pGlobalAddr)
+{
+	return m_pStun->GetConnectivity(NetType, pGlobalAddr);
 }

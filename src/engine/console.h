@@ -3,35 +3,62 @@
 #ifndef ENGINE_CONSOLE_H
 #define ENGINE_CONSOLE_H
 
-#include <base/color.h>
-#include <engine/storage.h>
 #include "kernel.h"
+
+#include <base/color.h>
+
+#include <engine/storage.h>
+
+#include <memory>
+#include <optional>
+#include <vector>
+
+static constexpr ColorRGBA CONSOLE_DEFAULT_COLOR = ColorRGBA(1.0f, 1.0f, 1.0f, 1.0f);
+
+enum LEVEL : char;
+struct CChecksumData;
 
 class IConsole : public IInterface
 {
-	MACRO_INTERFACE("console", 0)
+	MACRO_INTERFACE("console")
 public:
-
 	//	TODO: rework/cleanup
 	enum
 	{
-		OUTPUT_LEVEL_STANDARD=0,
+		OUTPUT_LEVEL_STANDARD = 0,
 		OUTPUT_LEVEL_ADDINFO,
 		OUTPUT_LEVEL_DEBUG,
+	};
 
-		ACCESS_LEVEL_ADMIN=0,
-		ACCESS_LEVEL_MOD,
-		ACCESS_LEVEL_HELPER,
-		ACCESS_LEVEL_USER,
+	enum
+	{
+		TEMPCMD_NAME_LENGTH = 64,
+		TEMPCMD_HELP_LENGTH = 192,
+		TEMPCMD_PARAMS_LENGTH = 96,
 
-		TEMPCMD_NAME_LENGTH=32,
-		TEMPCMD_HELP_LENGTH=96,
-		TEMPCMD_PARAMS_LENGTH=96,
+		CMDLINE_LENGTH = 512,
 
-		MAX_PRINT_CB=4,
+		// The id `-1` has full admin access on the server.
+		// It is used in the following cases:
+		// - Loading the config file on server start
+		// - Econ and fifo connections
+		// - Commands run on passed votes
+		//
+		// Client side it has less importance
+		// because there is no difference in access levels.
+		CLIENT_ID_UNSPECIFIED = -1,
+		CLIENT_ID_GAME = -2,
+		CLIENT_ID_NO_GAME = -3,
 
-		CLIENT_ID_GAME=-2,
-		CLIENT_ID_NO_GAME=-3,
+		FILE_RECURSION_LIMIT = 16,
+	};
+
+	enum class EAccessLevel
+	{
+		ADMIN,
+		MODERATOR,
+		HELPER,
+		USER,
 	};
 
 	// TODO: rework this interface to reduce the amount of virtual calls
@@ -39,48 +66,57 @@ public:
 	{
 	protected:
 		unsigned m_NumArgs;
-	public:
-		IResult() { m_NumArgs = 0; }
-		virtual ~IResult() {}
 
-		virtual int GetInteger(unsigned Index) = 0;
-		virtual float GetFloat(unsigned Index) = 0;
-		virtual const char *GetString(unsigned Index) = 0;
-		virtual ColorHSLA GetColor(unsigned Index, bool Light) = 0;
+	public:
+		IResult(int ClientId) :
+			m_NumArgs(0),
+			m_ClientId(ClientId) {}
+		virtual ~IResult() = default;
+
+		virtual int GetInteger(unsigned Index) const = 0;
+		virtual float GetFloat(unsigned Index) const = 0;
+		virtual const char *GetString(unsigned Index) const = 0;
+		virtual ColorHSLA GetColor(unsigned Index, float DarkestLighting) const = 0;
+
+		virtual void RemoveArgument(unsigned Index) = 0;
 
 		int NumArguments() const { return m_NumArgs; }
-		int m_ClientID;
+		int m_ClientId;
 
 		// DDRace
 
-		virtual int GetVictim() = 0;
+		virtual int GetVictim(unsigned Slot) const = 0;
 	};
 
-	class CCommandInfo
+	class ICommandInfo
 	{
-	protected:
-		int m_AccessLevel;
 	public:
-		CCommandInfo() { m_AccessLevel = ACCESS_LEVEL_ADMIN; }
-		virtual ~CCommandInfo() {}
-		const char *m_pName;
-		const char *m_pHelp;
-		const char *m_pParams;
-
-		virtual const CCommandInfo *NextCommandInfo(int AccessLevel, int FlagMask) const = 0;
-
-		int GetAccessLevel() const { return m_AccessLevel; }
+		virtual ~ICommandInfo() = default;
+		virtual const char *Name() const = 0;
+		virtual const char *Help() const = 0;
+		virtual const char *Params() const = 0;
+		// Whether any parameter of this command is a client id, see `Register`
+		virtual bool TakesClientId() const = 0;
+		virtual int Flags() const = 0;
+		virtual EAccessLevel GetAccessLevel() const = 0;
 	};
 
-	typedef void (*FTeeHistorianCommandCallback)(int ClientID, int FlagMask, const char *pCmd, IResult *pResult, void *pUser);
-	typedef void (*FPrintCallback)(const char *pStr, void *pUser, bool Highlighted);
-	typedef void (*FPossibleCallback)(const char *pCmd, void *pUser);
+	typedef std::optional<std::vector<int>> (*FGetVictimsCommandCallback)(int ClientId, const char *pVictim, void *pUser);
+	typedef void (*FTeeHistorianCommandCallback)(int ClientId, int FlagMask, const char *pCmd, IResult *pResult, void *pUser);
+	typedef void (*FPossibleCallback)(int Index, const char *pCmd, void *pUser);
 	typedef void (*FCommandCallback)(IResult *pResult, void *pUserData);
 	typedef void (*FChainCommandCallback)(IResult *pResult, void *pUserData, FCommandCallback pfnCallback, void *pCallbackUserData);
+	typedef bool (*FUnknownCommandCallback)(const char *pCommand, void *pUser); // returns true if the callback has handled the argument
+	typedef bool (*FCanUseCommandCallback)(int ClientId, const ICommandInfo *pCommand, void *pUser);
 
-	virtual const CCommandInfo *FirstCommandInfo(int AccessLevel, int Flagmask) const = 0;
-	virtual const CCommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) = 0;
-	virtual void PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback, void *pUser) = 0;
+	static void EmptyPossibleCommandCallback(int Index, const char *pCmd, void *pUser) {}
+	static bool EmptyUnknownCommandCallback(const char *pCommand, void *pUser) { return false; }
+
+	virtual void Init() = 0;
+	virtual const ICommandInfo *FirstCommandInfo(int ClientId, int FlagMask) const = 0;
+	virtual const ICommandInfo *NextCommandInfo(const IConsole::ICommandInfo *pInfo, int ClientId, int FlagMask) const = 0;
+	virtual const ICommandInfo *GetCommandInfo(const char *pName, int FlagMask, bool Temp) = 0;
+	virtual int PossibleCommands(const char *pStr, int FlagMask, bool Temp, FPossibleCallback pfnCallback = EmptyPossibleCommandCallback, void *pUser = nullptr) = 0;
 	virtual void ParseArguments(int NumArgs, const char **ppArguments) = 0;
 
 	virtual void Register(const char *pName, const char *pParams, int Flags, FCommandCallback pfnFunc, void *pUser, const char *pHelp) = 0;
@@ -91,27 +127,35 @@ public:
 	virtual void StoreCommands(bool Store) = 0;
 
 	virtual bool LineIsValid(const char *pStr) = 0;
-	virtual void ExecuteLine(const char *Sptr, int ClientID = -1, bool InterpretSemicolons = true) = 0;
-	virtual void ExecuteLineFlag(const char *Sptr, int FlasgMask, int ClientID = -1, bool InterpretSemicolons = true) = 0;
-	virtual void ExecuteLineStroked(int Stroke, const char *pStr, int ClientID = -1, bool InterpretSemicolons = true) = 0;
-	virtual void ExecuteFile(const char *pFilename, int ClientID = -1, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) = 0;
+	virtual void ExecuteLine(const char *pStr, int ClientId, bool InterpretSemicolons = true) = 0;
+	virtual void ExecuteLineFlag(const char *pStr, int FlasgMask, int ClientId, bool InterpretSemicolons = true) = 0;
+	virtual void ExecuteLineStroked(int Stroke, const char *pStr, int ClientId, bool InterpretSemicolons = true) = 0;
+	virtual bool ExecuteFile(const char *pFilename, int ClientId, bool LogFailure = false, int StorageType = IStorage::TYPE_ALL) = 0;
 
-	virtual int RegisterPrintCallback(int OutputLevel, FPrintCallback pfnPrintCallback, void *pUserData) = 0;
-	virtual void SetPrintOutputLevel(int Index, int OutputLevel) = 0;
-	virtual char *Format(char *pBuf, int Size, const char *pFrom, const char *pStr) = 0;
-	virtual void Print(int Level, const char *pFrom, const char *pStr, bool Highlighted = false) = 0;
+	/**
+	 * @deprecated Prefer using the `log_*` functions from base/log.h instead of this function for the following reasons:
+	 * - They support `printf`-formatting without a separate buffer.
+	 * - They support all five log levels.
+	 * - They do not require a pointer to `IConsole` to be used.
+	 */
+	virtual void Print(int Level, const char *pFrom, const char *pStr, ColorRGBA PrintColor = CONSOLE_DEFAULT_COLOR) const = 0;
+	virtual void SetGetVictimsCommandCallback(FGetVictimsCommandCallback pfnCallback, void *pUser) = 0;
 	virtual void SetTeeHistorianCommandCallback(FTeeHistorianCommandCallback pfnCallback, void *pUser) = 0;
+	virtual void SetUnknownCommandCallback(FUnknownCommandCallback pfnCallback, void *pUser) = 0;
+	virtual void SetCanUseCommandCallback(FCanUseCommandCallback pfnCallback, void *pUser) = 0;
+	virtual void InitChecksum(CChecksumData *pData) const = 0;
 
-	virtual void SetAccessLevel(int AccessLevel) = 0;
-
-	virtual void ResetServerGameSettings() = 0;
+	static LEVEL ToLogLevel(int ConsoleLevel);
+	static int ToLogLevelFilter(int ConsoleLevel);
 
 	// DDRace
 
-	bool m_Cheated;
+	virtual bool Cheated() const = 0;
+
+	virtual int FlagMask() const = 0;
 	virtual void SetFlagMask(int FlagMask) = 0;
 };
 
-extern IConsole *CreateConsole(int FlagMask);
+std::unique_ptr<IConsole> CreateConsole(int FlagMask);
 
-#endif // FILE_ENGINE_CONSOLE_H
+#endif // ENGINE_CONSOLE_H

@@ -1,94 +1,74 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/system.h>
-
 #include "compression.h"
 
-// Format: ESDDDDDD EDDDDDDD EDD... Extended, Data, Sign
-unsigned char *CVariableInt::Pack(unsigned char *pDst, int i)
-{
-	*pDst = (i>>25)&0x40; // set sign bit if i<0
-	i = i^(i>>31); // if(i<0) i = ~i
+#include <base/dbg.h>
 
-	*pDst |= i&0x3F; // pack 6bit into dst
-	i >>= 6; // discard 6 bits
-	if(i)
+#include <iterator> // std::size
+
+const unsigned char *CVariableInt::Unpack(const unsigned char *pSrc, int *pInOut, int SrcSize)
+{
+	if(SrcSize <= 0)
+		return nullptr;
+
+	const int Sign = (*pSrc >> 6) & 1;
+	*pInOut = *pSrc & 0x3F;
+	SrcSize--;
+
+	static const int s_aMasks[] = {0x7F, 0x7F, 0x7F, 0x0F};
+	static const int s_aShifts[] = {6, 6 + 7, 6 + 7 + 7, 6 + 7 + 7 + 7};
+
+	for(unsigned i = 0; i < std::size(s_aMasks); i++)
 	{
-		*pDst |= 0x80; // set extend bit
-		while(1)
-		{
-			pDst++;
-			*pDst = i&(0x7F); // pack 7bit
-			i >>= 7; // discard 7 bits
-			*pDst |= (i!=0)<<7; // set extend bit (may branch)
-			if(!i)
-				break;
-		}
+		if(!(*pSrc & 0x80))
+			break;
+		if(SrcSize <= 0)
+			return nullptr;
+		SrcSize--;
+		pSrc++;
+		*pInOut |= (*pSrc & s_aMasks[i]) << s_aShifts[i];
 	}
-
-	pDst++;
-	return pDst;
-}
-
-const unsigned char *CVariableInt::Unpack(const unsigned char *pSrc, int *pInOut)
-{
-	int Sign = (*pSrc>>6)&1;
-	*pInOut = *pSrc&0x3F;
-
-	do
-	{
-		if(!(*pSrc&0x80)) break;
-		pSrc++;
-		*pInOut |= (*pSrc&(0x7F))<<(6);
-
-		if(!(*pSrc&0x80)) break;
-		pSrc++;
-		*pInOut |= (*pSrc&(0x7F))<<(6+7);
-
-		if(!(*pSrc&0x80)) break;
-		pSrc++;
-		*pInOut |= (*pSrc&(0x7F))<<(6+7+7);
-
-		if(!(*pSrc&0x80)) break;
-		pSrc++;
-		*pInOut |= (*pSrc&(0x7F))<<(6+7+7+7);
-	} while(0);
 
 	pSrc++;
 	*pInOut ^= -Sign; // if(sign) *i = ~(*i)
 	return pSrc;
 }
 
-
-long CVariableInt::Decompress(const void *pSrc_, int Size, void *pDst_, int DstSize)
+long CVariableInt::Decompress(const void *pSrc, int SrcSize, void *pDst, int DstSize)
 {
-	const unsigned char *pSrc = (unsigned char *)pSrc_;
-	const unsigned char *pEnd = pSrc + Size;
-	int *pDst = (int *)pDst_;
-	int *pDstEnd = pDst + DstSize / 4;
-	while(pSrc < pEnd)
+	dbg_assert(DstSize % sizeof(int) == 0, "invalid bounds");
+
+	const unsigned char *pCharSrc = (unsigned char *)pSrc;
+	const unsigned char *pCharSrcEnd = pCharSrc + SrcSize;
+	int *pIntDst = (int *)pDst;
+	const int *pIntDstEnd = pIntDst + DstSize / sizeof(int); // NOLINT(bugprone-sizeof-expression)
+	while(pCharSrc < pCharSrcEnd)
 	{
-		if(pDst >= pDstEnd)
+		if(pIntDst >= pIntDstEnd)
 			return -1;
-		pSrc = CVariableInt::Unpack(pSrc, pDst);
-		pDst++;
+		pCharSrc = CVariableInt::Unpack(pCharSrc, pIntDst, pCharSrcEnd - pCharSrc);
+		if(!pCharSrc)
+			return -1;
+		pIntDst++;
 	}
-	return (unsigned char *)pDst-(unsigned char *)pDst_;
+	return (long)((unsigned char *)pIntDst - (unsigned char *)pDst);
 }
 
-long CVariableInt::Compress(const void *pSrc_, int Size, void *pDst_, int DstSize)
+long CVariableInt::Compress(const void *pSrc, int SrcSize, void *pDst, int DstSize)
 {
-	int *pSrc = (int *)pSrc_;
-	unsigned char *pDst = (unsigned char *)pDst_;
-	unsigned char *pDstEnd = pDst + DstSize;
-	Size /= 4;
-	while(Size)
+	dbg_assert(SrcSize % sizeof(int) == 0, "invalid bounds");
+
+	const int *pIntSrc = (int *)pSrc;
+	unsigned char *pCharDst = (unsigned char *)pDst;
+	const unsigned char *pCharDstEnd = pCharDst + DstSize;
+	SrcSize /= sizeof(int);
+	while(SrcSize)
 	{
-		if(pDstEnd - pDst < 6)
+		pCharDst = CVariableInt::Pack(pCharDst, *pIntSrc, pCharDstEnd - pCharDst);
+		if(!pCharDst)
 			return -1;
-		pDst = CVariableInt::Pack(pDst, *pSrc);
-		Size--;
-		pSrc++;
+		SrcSize--;
+		pIntSrc++;
 	}
-	return pDst-(unsigned char *)pDst_;
+	return (long)(pCharDst - (unsigned char *)pDst);
 }

@@ -1,102 +1,84 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <engine/demo.h>
-#include <engine/graphics.h>
-#include <game/generated/protocol.h>
-#include <game/generated/client_data.h>
-
-#include <game/gamecore.h> // get_angle
-#include <game/client/ui.h>
-#include <game/client/render.h>
 #include "damageind.h"
 
-CDamageInd::CDamageInd()
-{
-	m_Lastupdate = 0;
-	m_NumItems = 0;
-}
+#include <base/color.h>
+#include <base/math.h>
+#include <base/vmath.h>
 
-CDamageInd::CItem *CDamageInd::CreateI()
-{
-	if(m_NumItems < MAX_ITEMS)
-	{
-		CItem *p = &m_aItems[m_NumItems];
-		m_NumItems++;
-		return p;
-	}
-	return 0;
-}
+#include <engine/client.h>
+#include <engine/graphics.h>
 
-void CDamageInd::DestroyI(CDamageInd::CItem *i)
-{
-	m_NumItems--;
-	*i = m_aItems[m_NumItems];
-}
+#include <generated/client_data.h>
 
-void CDamageInd::Create(vec2 Pos, vec2 Dir)
+#include <game/client/gameclient.h>
+
+#include <algorithm>
+
+void CDamageInd::Create(vec2 Pos, vec2 Dir, float Alpha)
 {
-	CItem *i = CreateI();
-	if(i)
-	{
-		i->m_Pos = Pos;
-		i->m_StartTime = LocalTime();
-		i->m_Dir = Dir*-1;
-		i->m_StartAngle = (( (float)rand()/(float)RAND_MAX) - 1.0f) * 2.0f * pi;
-	}
+	if(m_vItems.size() >= MAX_ITEMS)
+		return;
+
+	m_vItems.emplace_back(Pos, -Dir, 0.75f, -random_angle(), ColorRGBA(1.0f, 1.0f, 1.0f, Alpha));
 }
 
 void CDamageInd::OnRender()
 {
-	Graphics()->TextureSet(g_pData->m_aImages[IMAGE_GAME].m_Id);
-	static float s_LastLocalTime = LocalTime();
-	for(int i = 0; i < m_NumItems;)
-	{
-		if(Client()->State() == IClient::STATE_DEMOPLAYBACK)
-		{
-			const IDemoPlayer::CInfo *pInfo = DemoPlayer()->BaseInfo();
-			if(pInfo->m_Paused)
-				m_aItems[i].m_StartTime += LocalTime()-s_LastLocalTime;
-			else
-				m_aItems[i].m_StartTime += (LocalTime()-s_LastLocalTime)*(1.0f-pInfo->m_Speed);
-		}
-		else
-		{
-			if(m_pClient->m_Snap.m_pGameInfoObj && m_pClient->m_Snap.m_pGameInfoObj->m_GameStateFlags&GAMESTATEFLAG_PAUSED)
-				m_aItems[i].m_StartTime += LocalTime()-s_LastLocalTime;
-		}
+	if(Client()->State() != IClient::STATE_ONLINE && Client()->State() != IClient::STATE_DEMOPLAYBACK)
+		return;
 
-		float Life = 0.75f - (LocalTime() - m_aItems[i].m_StartTime);
-		if(Life < 0.0f)
-			DestroyI(&m_aItems[i]);
-		else
-		{
-			vec2 Pos = mix(m_aItems[i].m_Pos+m_aItems[i].m_Dir*75.0f, m_aItems[i].m_Pos, clamp((Life-0.60f)/0.15f, 0.0f, 1.0f));
-			Graphics()->SetColor(1.0f,1.0f,1.0f, Life/0.1f);
-			Graphics()->QuadsSetRotation(m_aItems[i].m_StartAngle + Life * 2.0f);
-			Graphics()->RenderQuadContainerAsSprite(m_DmgIndQuadContainerIndex, 0, Pos.x, Pos.y);
-			i++;
-		}
-	}
+	static float s_LastLocalTime = LocalTime();
+	const float LifeAdjustment = (LocalTime() - s_LastLocalTime) * GameClient()->GetAnimationPlaybackSpeed();
 	s_LastLocalTime = LocalTime();
 
-	Graphics()->QuadsSetRotation(0);
-	Graphics()->SetColor(1.f, 1.f, 1.f, 1.f);
+	Graphics()->TextureSet(GameClient()->m_GameSkin.m_aSpriteStars[0]);
+
+	// Get screen edges to avoid rendering offscreen
+	CScreenRect ScreenRect = Graphics()->GetScreen();
+
+	// Expand screen slightly so items don't randomly pop in
+	ScreenRect.Expand(m_ExpandSize);
+
+	for(CItem &Item : m_vItems)
+		Item.m_RemainingLife -= LifeAdjustment;
+
+	m_vItems.erase(std::remove_if(m_vItems.begin(), m_vItems.end(),
+			       [](const CItem &Item) { return Item.m_RemainingLife <= 0.0f; }),
+		m_vItems.end());
+
+	for(CItem &Item : m_vItems)
+	{
+		vec2 Pos = mix(Item.m_Pos + Item.m_Dir * 75.0f, Item.m_Pos, std::clamp((Item.m_RemainingLife - 0.60f) / 0.15f, 0.0f, 1.0f));
+		if(!ScreenRect.Inside(Pos))
+			continue;
+
+		const float LifeAlpha = Item.m_RemainingLife / 0.1f;
+		Graphics()->SetColor(Item.m_Color.WithMultipliedAlpha(LifeAlpha));
+		Graphics()->QuadsSetRotation(Item.m_StartAngle + Item.m_RemainingLife * 2.0f);
+		Graphics()->RenderQuadContainerAsSprite(m_DamageIndQuadContainerIndex, 0, Pos.x, Pos.y);
+	}
+
+	Graphics()->QuadsSetRotation(0.0f);
+	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 void CDamageInd::OnInit()
 {
-	Graphics()->QuadsSetRotation(0);
-	Graphics()->SetColor(1.f, 1.f, 1.f, 1.f);
+	Graphics()->QuadsSetRotation(0.0f);
+	Graphics()->SetColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-	m_DmgIndQuadContainerIndex = Graphics()->CreateQuadContainer();
-	RenderTools()->SelectSprite(SPRITE_STAR1);
-	RenderTools()->QuadContainerAddSprite(m_DmgIndQuadContainerIndex, 48.f);
+	m_DamageIndQuadContainerIndex = Graphics()->CreateQuadContainer(false);
+	float ScaleX, ScaleY;
+	Graphics()->GetSpriteScale(SPRITE_STAR1, ScaleX, ScaleY);
+	Graphics()->QuadsSetSubset(0.0f, 0.0f, 1.0f, 1.0f);
+	Graphics()->QuadContainerAddSprite(m_DamageIndQuadContainerIndex, 48.0f * ScaleX, 48.0f * ScaleY);
+	Graphics()->QuadContainerUpload(m_DamageIndQuadContainerIndex);
+
+	m_ExpandSize = std::max(ScaleX, ScaleY) * 24.0f;
 }
 
-void CDamageInd::Reset()
+void CDamageInd::OnReset()
 {
-	for(int i = 0; i < m_NumItems;)
-	{
-		DestroyI(&m_aItems[i]);
-	}
+	m_vItems.clear();
 }

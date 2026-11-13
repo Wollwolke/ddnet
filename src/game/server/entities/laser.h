@@ -4,16 +4,20 @@
 #define GAME_SERVER_ENTITIES_LASER_H
 
 #include <game/server/entity.h>
+#include <game/server/interactions.h>
 
 class CLaser : public CEntity
 {
 public:
 	CLaser(CGameWorld *pGameWorld, vec2 Pos, vec2 Direction, float StartEnergy, int Owner, int Type);
 
-	virtual void Reset();
-	virtual void Tick();
-	virtual void TickPaused();
-	virtual void Snap(int SnappingClient);
+	void Reset() override;
+	void Tick() override;
+	void TickPaused() override;
+	void Snap(int SnappingClient) override;
+	void SwapClients(int Client1, int Client2) override;
+
+	int GetOwnerId() const override { return m_Owner; }
 
 protected:
 	bool HitCharacter(vec2 From, vec2 To);
@@ -28,7 +32,8 @@ private:
 	int m_Bounces;
 	int m_EvalTick;
 	int m_Owner;
-	int m_TeamMask;
+	bool m_ZeroEnergyBounceInLastTick;
+	CInteractions m_InteractState;
 
 	// DDRace
 
@@ -37,6 +42,8 @@ private:
 	int m_TuneZone;
 	bool m_TeleportCancelled;
 	bool m_IsBlueTeleport;
+	bool m_BelongsToPracticeTeam;
+	void SyncInteractState();
 };
 
 #endif

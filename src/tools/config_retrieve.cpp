@@ -1,25 +1,32 @@
-#include <base/system.h>
-#include <engine/shared/datafile.h>
+#include <base/fs.h>
+#include <base/io.h>
+#include <base/log.h>
+#include <base/str.h>
+
+#include <engine/map.h>
 #include <engine/storage.h>
+
 #include <game/mapitems.h>
 
-void Process(IStorage *pStorage, const char *pMapName, const char *pConfigName)
+static constexpr const char *const TOOL_NAME = "config_retrieve";
+
+static void Process(IStorage *pStorage, const char *pMapName, const char *pConfigName)
 {
-	CDataFileReader Map;
-	if(!Map.Open(pStorage, pMapName, IStorage::TYPE_ABSOLUTE))
+	std::shared_ptr<IMap> pMap = CreateMap();
+	if(!pMap->Load(pStorage, pMapName, IStorage::TYPE_ABSOLUTE))
 	{
-		dbg_msg("config_retrieve", "error opening map '%s'", pMapName);
+		log_error(TOOL_NAME, "Failed to open map '%s' for reading", pMapName);
 		return;
 	}
 	bool ConfigFound = false;
 	int Start, Num;
-	Map.GetType(MAPITEMTYPE_INFO, &Start, &Num);
+	pMap->GetType(MAPITEMTYPE_INFO, &Start, &Num);
 	for(int i = Start; i < Start + Num; i++)
 	{
-		int ItemID;
-		CMapItemInfoSettings *pItem = (CMapItemInfoSettings *)Map.GetItem(i, 0, &ItemID);
-		int ItemSize = Map.GetItemSize(i);
-		if(!pItem || ItemID != 0)
+		int Id;
+		CMapItemInfoSettings *pItem = (CMapItemInfoSettings *)pMap->GetItem(i, nullptr, &Id);
+		int ItemSize = pMap->GetItemSize(i);
+		if(!pItem || Id != 0)
 			continue;
 
 		if(ItemSize < (int)sizeof(CMapItemInfoSettings))
@@ -31,12 +38,12 @@ void Process(IStorage *pStorage, const char *pMapName, const char *pConfigName)
 		IOHANDLE Config = pStorage->OpenFile(pConfigName, IOFLAG_WRITE, IStorage::TYPE_ABSOLUTE);
 		if(!Config)
 		{
-			dbg_msg("config_retrieve", "error opening config for writing '%s'", pConfigName);
+			log_error(TOOL_NAME, "Failed to open config '%s' for writing", pConfigName);
 			return;
 		}
 
-		int Size = Map.GetDataSize(pItem->m_Settings);
-		char *pSettings = (char *)Map.GetData(pItem->m_Settings);
+		int Size = pMap->GetDataSize(pItem->m_Settings);
+		char *pSettings = (char *)pMap->GetData(pItem->m_Settings);
 		char *pNext = pSettings;
 		while(pNext < pSettings + Size)
 		{
@@ -45,14 +52,14 @@ void Process(IStorage *pStorage, const char *pMapName, const char *pConfigName)
 			io_write_newline(Config);
 			pNext += StrSize;
 		}
-		Map.UnloadData(pItem->m_Settings);
+		pMap->UnloadData(pItem->m_Settings);
 		io_close(Config);
 		break;
 	}
-	Map.Close();
+	pMap->Unload();
 	if(!ConfigFound)
 	{
-		fs_remove(pConfigName);
+		(void)fs_remove(pConfigName);
 	}
 }
 #include "config_common.h"

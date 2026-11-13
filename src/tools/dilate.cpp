@@ -1,103 +1,71 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
-#include <base/system.h>
-#include <base/math.h>
-#include <pnglite.h>
 
-typedef struct
+#include <base/io.h>
+#include <base/logger.h>
+#include <base/os.h>
+#include <base/str.h>
+
+#include <engine/gfx/image_loader.h>
+#include <engine/gfx/image_manipulation.h>
+
+static constexpr const char *const TOOL_NAME = "dilate";
+
+static bool DilateFile(const char *pFilename, bool DryRun)
 {
-	unsigned char r, g, b, a;
-} CPixel;
+	CImageInfo Image;
+	int PngliteIncompatible;
+	if(!CImageLoader::LoadPng(io_open(pFilename, IOFLAG_READ), pFilename, Image, PngliteIncompatible))
+		return false;
 
-static void Dilate(int w, int h, CPixel *pSrc, CPixel *pDest)
-{
-	int ix, iy;
-	const int xo[] = {0, -1, 1, 0};
-	const int yo[] = {-1, 0, 0, 1};
-
-	int m = 0;
-	for(int y = 0; y < h; y++)
+	if(Image.m_Format != CImageInfo::FORMAT_RGBA)
 	{
-		for(int x = 0; x < w; x++, m++)
-		{
-			pDest[m] = pSrc[m];
-			if(pSrc[m].a)
-				continue;
-
-			for(int c = 0; c < 4; c++)
-			{
-				ix = clamp(x + xo[c], 0, w-1);
-				iy = clamp(y + yo[c], 0, h-1);
-				int k = iy*w+ix;
-				if(pSrc[k].a)
-				{
-					pDest[m] = pSrc[k];
-					pDest[m].a = 255;
-					break;
-				}
-			}
-		}
-	}
-}
-
-static void CopyAlpha(int w, int h, CPixel *pSrc, CPixel *pDest)
-{
-	int m = 0;
-	for(int y = 0; y < h; y++)
-		for(int x = 0; x < w; x++, m++)
-			pDest[m].a = pSrc[m].a;
-}
-
-int DilateFile(const char *pFileName)
-{
-	png_t Png;
-	CPixel *pBuffer[3] = {0,0,0};
-
-	png_init(0, 0);
-	png_open_file(&Png, pFileName);
-
-	if(Png.color_type != PNG_TRUECOLOR_ALPHA)
-	{
-		dbg_msg("dilate", "%s: not an RGBA image", pFileName);
-		return 1;
+		log_error(TOOL_NAME, "Only RGBA PNG images are supported");
+		Image.Free();
+		return false;
 	}
 
-	pBuffer[0] = (CPixel *)malloc(Png.width * Png.height * sizeof(CPixel));
-	pBuffer[1] = (CPixel *)malloc(Png.width * Png.height * sizeof(CPixel));
-	pBuffer[2] = (CPixel *)malloc(Png.width * Png.height * sizeof(CPixel));
-	png_get_data(&Png, (unsigned char *)pBuffer[0]);
-	png_close_file(&Png);
-
-	int w = Png.width;
-	int h = Png.height;
-
-	Dilate(w, h, pBuffer[0], pBuffer[1]);
-	for(int i = 0; i < 5; i++)
+	if(DryRun)
 	{
-		Dilate(w, h, pBuffer[1], pBuffer[2]);
-		Dilate(w, h, pBuffer[2], pBuffer[1]);
+		CImageInfo OldImage = Image.DeepCopy();
+		DilateImage(Image);
+		const bool EqualImages = Image.DataEquals(OldImage);
+		Image.Free();
+		OldImage.Free();
+		log_info(TOOL_NAME, "'%s' is %sdilated", pFilename, EqualImages ? "" : "NOT ");
+		return EqualImages;
 	}
-
-	CopyAlpha(w, h, pBuffer[0], pBuffer[1]);
-
-	// save here
-	png_open_file_write(&Png, pFileName);
-	png_set_data(&Png, w, h, 8, PNG_TRUECOLOR_ALPHA, (unsigned char *)pBuffer[1]);
-	png_close_file(&Png);
-
-	return 0;
+	else
+	{
+		DilateImage(Image);
+		const bool SaveResult = CImageLoader::SavePng(io_open(pFilename, IOFLAG_WRITE), pFilename, Image);
+		Image.Free();
+		return SaveResult;
+	}
 }
 
 int main(int argc, const char **argv)
 {
-	dbg_logger_stdout();
+	CCmdlineFix CmdlineFix(&argc, &argv);
+	log_set_global_logger_default();
+
 	if(argc == 1)
 	{
-		dbg_msg("usage", "%s FILE1 [ FILE2... ]", argv[0]);
+		log_error(TOOL_NAME, "Usage: %s [--dry-run] <image1.png> [<image2.png> ...]", argc > 0 ? argv[0] : TOOL_NAME);
 		return -1;
 	}
 
-	for(int i = 1; i < argc; i++)
-		DilateFile(argv[i]);
-	return 0;
+	const bool DryRun = str_comp(argv[1], "--dry-run") == 0;
+	if(DryRun && argc < 3)
+	{
+		log_error(TOOL_NAME, "Usage: %s [--dry-run] <image1.png> [<image2.png> ...]", argc > 0 ? argv[0] : TOOL_NAME);
+		return -1;
+	}
+
+	bool Success = true;
+	for(int i = (DryRun ? 2 : 1); i < argc; i++)
+	{
+		Success &= DilateFile(argv[i], DryRun);
+	}
+	return Success ? 0 : -1;
 }

@@ -2,32 +2,49 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_ITEMS_H
 #define GAME_CLIENT_COMPONENTS_ITEMS_H
+
+#include <base/color.h>
+
+#include <generated/protocol.h>
+
 #include <game/client/component.h>
+
+class CProjectileData;
+class CLaserData;
+class CScreenRect;
 
 class CItems : public CComponent
 {
-	enum
-	{
-		MAX_EXTRA_PROJECTILES=32,
-	};
-
-	CNetObj_Projectile m_aExtraProjectiles[MAX_EXTRA_PROJECTILES];
-	int m_NumExtraProjectiles;
-
-	void RenderProjectile(const CNetObj_Projectile *pCurrent, int ItemID);
-	void RenderPickup(const CNetObj_Pickup *pPrev, const CNetObj_Pickup *pCurrent, bool IsPredicted = false);
+	void RenderProjectile(const CProjectileData *pCurrent, int ItemId, const CScreenRect &ScreenRect);
+	void RenderPickup(const CNetObj_Pickup *pPrev, const CNetObj_Pickup *pCurrent, bool IsPredicted, int Flags);
+	void RenderFlags();
 	void RenderFlag(const CNetObj_Flag *pPrev, const CNetObj_Flag *pCurrent, const CNetObj_GameData *pPrevGameData, const CNetObj_GameData *pCurGameData);
-	void RenderLaser(const struct CNetObj_Laser *pCurrent, bool IsPredicted = false);
+	void RenderLaser(const CLaserData *pCurrent, bool IsPredicted = false);
 
 	int m_ItemsQuadContainerIndex;
+
 public:
-	virtual void OnReset();
-	virtual void OnRender();
-	virtual void OnInit();
+	int Sizeof() const override { return sizeof(*this); }
+	void OnRender() override;
+	void OnInit() override;
 
-	void AddExtraProjectile(CNetObj_Projectile *pProj);
+	void ReconstructSmokeTrail(const CProjectileData *pCurrent, int DestroyTick);
+	void RenderLaser(vec2 From, vec2 Pos, ColorRGBA OuterColor, ColorRGBA InnerColor, float TicksBody, float TicksHead, int Type) const;
 
-	void ReconstructSmokeTrail(const CNetObj_Projectile *pCurrent, int ItemID, int DestroyTick);
+private:
+	int m_BlueFlagOffset;
+	int m_RedFlagOffset;
+	int m_PickupHealthOffset;
+	int m_PickupArmorOffset;
+	int m_PickupFreezeOffset;
+	int m_aPickupWeaponOffset[NUM_WEAPONS];
+	int m_PickupNinjaOffset;
+	int m_aPickupWeaponArmorOffset[4];
+	int m_aProjectileOffset[NUM_WEAPONS];
+	int m_aParticleSplatOffset[3];
+	int m_DoorHeadOffset;
+	int m_PulleyHeadOffset;
+	int m_FreezeHeadOffset;
 };
 
 #endif

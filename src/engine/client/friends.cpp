@@ -1,13 +1,15 @@
 /* (c) Magnus Auvinen. See licence.txt in the root of the distribution for more information. */
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
+#include "friends.h"
+
+#include <base/dbg.h>
 #include <base/math.h>
-#include <base/system.h>
+#include <base/mem.h>
+#include <base/str.h>
 
 #include <engine/config.h>
 #include <engine/console.h>
 #include <engine/shared/config.h>
-
-#include "friends.h"
 
 CFriends::CFriends()
 {
@@ -38,9 +40,9 @@ void CFriends::Init(bool Foes)
 {
 	m_Foes = Foes;
 
-	IConfig *pConfig = Kernel()->RequestInterface<IConfig>();
-	if(pConfig)
-		pConfig->RegisterCallback(ConfigSaveCallback, this);
+	IConfigManager *pConfigManager = Kernel()->RequestInterface<IConfigManager>();
+	if(pConfigManager)
+		pConfigManager->RegisterCallback(ConfigSaveCallback, this);
 
 	IConsole *pConsole = Kernel()->RequestInterface<IConsole>();
 	if(pConsole)
@@ -62,7 +64,8 @@ void CFriends::Init(bool Foes)
 
 const CFriendInfo *CFriends::GetFriend(int Index) const
 {
-	return &m_aFriends[maximum(0, Index%m_NumFriends)];
+	dbg_assert(Index >= 0 && Index < m_NumFriends, "Invalid Index: %d", Index);
+	return &m_aFriends[Index];
 }
 
 int CFriends::GetFriendState(const char *pName, const char *pClan) const
@@ -75,7 +78,9 @@ int CFriends::GetFriendState(const char *pName, const char *pClan) const
 		if((g_Config.m_ClFriendsIgnoreClan && m_aFriends[i].m_aName[0]) || (m_aFriends[i].m_ClanHash == ClanHash && !str_comp(m_aFriends[i].m_aClan, pClan)))
 		{
 			if(m_aFriends[i].m_aName[0] == 0)
+			{
 				Result = FRIEND_CLAN;
+			}
 			else if(m_aFriends[i].m_NameHash == NameHash && !str_comp(m_aFriends[i].m_aName, pName))
 			{
 				Result = FRIEND_PLAYER;
@@ -113,8 +118,8 @@ void CFriends::AddFriend(const char *pName, const char *pClan)
 			return;
 	}
 
-	str_copy(m_aFriends[m_NumFriends].m_aName, pName, sizeof(m_aFriends[m_NumFriends].m_aName));
-	str_copy(m_aFriends[m_NumFriends].m_aClan, pClan, sizeof(m_aFriends[m_NumFriends].m_aClan));
+	str_copy(m_aFriends[m_NumFriends].m_aName, pName);
+	str_copy(m_aFriends[m_NumFriends].m_aClan, pClan);
 	m_aFriends[m_NumFriends].m_NameHash = NameHash;
 	m_aFriends[m_NumFriends].m_ClanHash = ClanHash;
 	++m_NumFriends;
@@ -137,11 +142,9 @@ void CFriends::RemoveFriend(const char *pName, const char *pClan)
 
 void CFriends::RemoveFriend(int Index)
 {
-	if(Index >= 0 && Index < m_NumFriends)
-	{
-		mem_move(&m_aFriends[Index], &m_aFriends[Index+1], sizeof(CFriendInfo)*(m_NumFriends-(Index+1)));
-		--m_NumFriends;
-	}
+	dbg_assert(Index >= 0 && Index < m_NumFriends, "Invalid Index: %d", Index);
+	mem_move(&m_aFriends[Index], &m_aFriends[Index + 1], sizeof(CFriendInfo) * (m_NumFriends - (Index + 1)));
+	--m_NumFriends;
 }
 
 void CFriends::Friends()
@@ -153,28 +156,29 @@ void CFriends::Friends()
 		for(int i = 0; i < m_NumFriends; ++i)
 		{
 			str_format(aBuf, sizeof(aBuf), "Name: %s, Clan: %s", m_aFriends[i].m_aName, m_aFriends[i].m_aClan);
-			pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, m_Foes?"foes":"friends", aBuf, true);
+
+			pConsole->Print(IConsole::OUTPUT_LEVEL_STANDARD, m_Foes ? "foes" : "friends", aBuf, color_cast<ColorRGBA>(ColorHSLA(g_Config.m_ClMessageHighlightColor)));
 		}
 	}
 }
 
-void CFriends::ConfigSaveCallback(IConfig *pConfig, void *pUserData)
+void CFriends::ConfigSaveCallback(IConfigManager *pConfigManager, void *pUserData)
 {
 	CFriends *pSelf = (CFriends *)pUserData;
 	char aBuf[128];
-	const char *pEnd = aBuf+sizeof(aBuf)-4;
+	const char *pEnd = aBuf + sizeof(aBuf) - 4;
 	for(int i = 0; i < pSelf->m_NumFriends; ++i)
 	{
-		str_copy(aBuf, pSelf->m_Foes ? "add_foe " : "add_friend ", sizeof(aBuf));
+		str_copy(aBuf, pSelf->m_Foes ? "add_foe " : "add_friend ");
 
-		str_append(aBuf, "\"", sizeof(aBuf));
+		str_append(aBuf, "\"");
 		char *pDst = aBuf + str_length(aBuf);
 		str_escape(&pDst, pSelf->m_aFriends[i].m_aName, pEnd);
-		str_append(aBuf, "\" \"", sizeof(aBuf));
+		str_append(aBuf, "\" \"");
 		pDst = aBuf + str_length(aBuf);
 		str_escape(&pDst, pSelf->m_aFriends[i].m_aClan, pEnd);
-		str_append(aBuf, "\"", sizeof(aBuf));
+		str_append(aBuf, "\"");
 
-		pConfig->WriteLine(aBuf);
+		pConfigManager->WriteLine(aBuf);
 	}
 }

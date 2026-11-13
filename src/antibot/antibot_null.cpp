@@ -1,39 +1,50 @@
-#include "antibot_data.h"
+#define ANTIBOTAPI DYNAMIC_EXPORT
+
+#include <antibot/antibot_interface.h>
+
+#include <cstring>
 
 static CAntibotData *g_pData;
 
-extern "C"
-{
+extern "C" {
 
 int AntibotAbiVersion()
 {
 	return ANTIBOT_ABI_VERSION;
 }
-void AntibotInit(CAntibotData *pData)
+void AntibotInit(CAntibotData *pCallbackData)
 {
-	g_pData = pData;
+	g_pData = pCallbackData;
 	g_pData->m_pfnLog("null antibot initialized", g_pData->m_pUser);
 }
-void AntibotRoundStart(CAntibotRoundData *pRoundData) { };
-void AntibotRoundEnd(void) { };
-void AntibotUpdateData(void) { }
-void AntibotDestroy(void) { g_pData = 0; }
-void AntibotDump(void)
+void AntibotRoundStart(CAntibotRoundData *pRoundData) {}
+void AntibotRoundEnd(void) {}
+void AntibotUpdateData(void) {}
+void AntibotDestroy(void) { g_pData = nullptr; }
+void AntibotConsoleCommand(int ClientId, const char *pCommand)
 {
-	g_pData->m_pfnLog("null antibot", g_pData->m_pUser);
+	if(strcmp(pCommand, "dump") == 0)
+	{
+		g_pData->m_pfnLog("null antibot", g_pData->m_pUser);
+	}
+	else
+	{
+		g_pData->m_pfnLog("unknown command", g_pData->m_pUser);
+	}
 }
-void AntibotOnPlayerInit(int ClientID) { (void)ClientID; }
-void AntibotOnPlayerDestroy(int ClientID) { (void)ClientID; }
-void AntibotOnSpawn(int ClientID) { (void)ClientID; }
-void AntibotOnHammerFireReloading(int ClientID) { (void)ClientID; }
-void AntibotOnHammerFire(int ClientID) { (void)ClientID; }
-void AntibotOnHammerHit(int ClientID) { (void)ClientID; }
-void AntibotOnDirectInput(int ClientID) { (void)ClientID; }
-void AntibotOnCharacterTick(int ClientID) { (void)ClientID; }
-void AntibotOnHookAttach(int ClientID, bool Player) { (void)ClientID; (void)Player; }
-void AntibotOnEngineTick(void) { }
-void AntibotOnEngineClientJoin(int ClientID) { (void)ClientID; }
-void AntibotOnEngineClientDrop(int ClientID, const char *pReason) { (void)ClientID; (void)pReason; }
-void AntibotOnEngineClientMessage(int ClientID, const void *pData, int Size, int Flags) { (void)ClientID; (void)pData; (void)Size; (void)Flags; }
-
+void AntibotOnPlayerInit(int /*ClientId*/) {}
+void AntibotOnPlayerDestroy(int /*ClientId*/) {}
+void AntibotOnSpawn(int /*ClientId*/) {}
+void AntibotOnHammerFireReloading(int /*ClientId*/) {}
+void AntibotOnHammerFire(int /*ClientId*/) {}
+void AntibotOnHammerHit(int /*ClientId*/, int /*TargetId*/) {}
+void AntibotOnDirectInput(int /*ClientId*/) {}
+void AntibotOnCharacterTick(int /*ClientId*/) {}
+void AntibotOnHookAttach(int /*ClientId*/, bool /*Player*/) {}
+void AntibotOnEngineTick(void) {}
+void AntibotOnEngineClientJoin(int /*ClientId*/) {}
+void AntibotOnEngineClientDrop(int /*ClientId*/, const char * /*pReason*/) {}
+bool AntibotOnEngineClientMessage(int /*ClientId*/, const void * /*pData*/, int /*Size*/, int /*Flags*/) { return false; }
+bool AntibotOnEngineServerMessage(int /*ClientId*/, const void * /*pData*/, int /*Size*/, int /*Flags*/) { return false; }
+bool AntibotOnEngineSimulateClientMessage(int * /*pClientId*/, void * /*pBuffer*/, int /*BufferSize*/, int * /*pOutSize*/, int * /*pFlags*/) { return false; }
 }

@@ -2,8 +2,12 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_SOUNDS_H
 #define GAME_CLIENT_COMPONENTS_SOUNDS_H
-#include <engine/engine.h>
+
+#include <base/vmath.h>
+
+#include <engine/shared/jobs.h>
 #include <engine/sound.h>
+
 #include <game/client/component.h>
 
 class CSoundLoading : public IJob
@@ -13,7 +17,7 @@ class CSoundLoading : public IJob
 
 public:
 	CSoundLoading(CGameClient *pGameClient, bool Render);
-	void Run();
+	void Run() override;
 };
 
 class CSounds : public CComponent
@@ -22,46 +26,53 @@ class CSounds : public CComponent
 	{
 		QUEUE_SIZE = 32,
 	};
-	struct QueueEntry
+	class CQueueEntry
 	{
+	public:
 		int m_Channel;
 		int m_SetId;
-	} m_aQueue[QUEUE_SIZE];
+	};
+	CQueueEntry m_aQueue[QUEUE_SIZE];
 	int m_QueuePos;
-	int64 m_QueueWaitTime;
+	int64_t m_QueueWaitTime;
 	std::shared_ptr<CSoundLoading> m_pSoundJob;
 	bool m_WaitForSoundJob;
 
+	void UpdateChannels();
 	int GetSampleId(int SetId);
 
-	float m_MapSoundVolume;
+	float m_GuiSoundVolume = -1.0f;
+	float m_GameSoundVolume = -1.0f;
+	float m_MapSoundVolume = -1.0f;
+	float m_BackgroundMusicVolume = -1.0f;
 
 public:
 	// sound channels
 	enum
 	{
-		CHN_GUI=0,
+		CHN_GUI = 0,
 		CHN_MUSIC,
 		CHN_WORLD,
 		CHN_GLOBAL,
 		CHN_MAPSOUND,
 	};
 
-	virtual void OnInit();
-	virtual void OnReset();
-	virtual void OnStateChange(int NewState, int OldState);
-	virtual void OnRender();
+	int Sizeof() const override { return sizeof(*this); }
+	void OnInit() override;
+	void OnReset() override;
+	void OnStateChange(int NewState, int OldState) override;
+	void OnRender() override;
 
 	void ClearQueue();
 	void Enqueue(int Channel, int SetId);
-	void Play(int Channel, int SetId, float Vol);
-	void PlayAt(int Channel, int SetId, float Vol, vec2 Pos);
-	void PlayAndRecord(int Channel, int SetId, float Vol, vec2 Pos);
+	void Play(int Channel, int SetId, float Volume);
+	void PlayAt(int Channel, int SetId, float Volume, vec2 Position);
+	void PlayAndRecord(int Channel, int SetId, float Volume, vec2 Position);
 	void Stop(int SetId);
+	bool IsPlaying(int SetId);
 
-	ISound::CVoiceHandle PlaySample(int Channel, int SampleId, float Vol, int Flags = 0);
-	ISound::CVoiceHandle PlaySampleAt(int Channel, int SampleId, float Vol, vec2 Pos, int Flags = 0);
+	ISound::CVoiceHandle PlaySample(int Channel, int SampleId, int Flags, float Volume);
+	ISound::CVoiceHandle PlaySampleAt(int Channel, int SampleId, int Flags, float Volume, vec2 Position);
 };
-
 
 #endif

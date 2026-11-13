@@ -2,38 +2,39 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_DAMAGEIND_H
 #define GAME_CLIENT_COMPONENTS_DAMAGEIND_H
+#include <base/color.h>
 #include <base/vmath.h>
+
 #include <game/client/component.h>
+
+#include <vector>
 
 class CDamageInd : public CComponent
 {
-	int64 m_Lastupdate;
 	struct CItem
 	{
 		vec2 m_Pos;
 		vec2 m_Dir;
-		float m_StartTime;
+		float m_RemainingLife;
 		float m_StartAngle;
+		ColorRGBA m_Color;
 	};
 
 	enum
 	{
-		MAX_ITEMS=64,
+		MAX_ITEMS = 1024,
 	};
 
-	CItem m_aItems[MAX_ITEMS];
-	int m_NumItems;
+	std::vector<CItem> m_vItems;
+	float m_ExpandSize;
+	int m_DamageIndQuadContainerIndex;
 
-	CItem *CreateI();
-	void DestroyI(CItem *i);
-
-	int m_DmgIndQuadContainerIndex;
 public:
-	CDamageInd();
+	int Sizeof() const override { return sizeof(*this); }
 
-	void Create(vec2 Pos, vec2 Dir);
-	void Reset();
-	virtual void OnRender();
-	virtual void OnInit();
+	void Create(vec2 Pos, vec2 Dir, float Alpha);
+	void OnReset() override;
+	void OnRender() override;
+	void OnInit() override;
 };
 #endif

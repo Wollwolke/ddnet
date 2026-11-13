@@ -1,5 +1,8 @@
 #include "csv.h"
 
+#include <base/io.h>
+#include <base/str.h>
+
 void CsvWrite(IOHANDLE File, int NumColumns, const char *const *ppColumns)
 {
 	for(int i = 0; i < NumColumns; i++)

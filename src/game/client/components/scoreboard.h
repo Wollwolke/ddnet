@@ -2,37 +2,118 @@
 /* If you are missing that file, acquire a complete release at teeworlds.com.                */
 #ifndef GAME_CLIENT_COMPONENTS_SCOREBOARD_H
 #define GAME_CLIENT_COMPONENTS_SCOREBOARD_H
+
+#include <engine/console.h>
+#include <engine/graphics.h>
+
 #include <game/client/component.h>
+#include <game/client/ui.h>
+#include <game/client/ui_rect.h>
 
 class CScoreboard : public CComponent
 {
-	void RenderGoals(float x, float y, float w);
-	void RenderSpectators(float x, float y, float w);
-	void RenderScoreboard(float x, float y, float w, int Team, const char *pTitle);
+	struct CScoreboardRenderState
+	{
+		float m_TeamStartX;
+		float m_TeamStartY;
+		int m_CurrentDDTeamSize;
+
+		CScoreboardRenderState() :
+			m_TeamStartX(0), m_TeamStartY(0), m_CurrentDDTeamSize(0) {}
+	};
+
+	void RenderTitleScore(CUIRect ScoreLabel, int Team, float TitleFontSize);
+	void RenderTitle(CUIRect TitleLabel, int Team, const char *pTitle, float TitleFontSize);
+	void RenderTitleBar(CUIRect TitleBar, int Team, const char *pTitle);
+	void RenderGoals(CUIRect Goals);
+	void RenderSpectators(CUIRect Spectators);
+	void RenderMouseHint(CUIRect MouseHint);
+	void RenderScoreboard(CUIRect Scoreboard, int Team, int CountStart, int CountEnd, CScoreboardRenderState &State, int NumPlayersForSize = -1);
 	void RenderRecordingNotification(float x);
 
 	static void ConKeyScoreboard(IConsole::IResult *pResult, void *pUserData);
+	static void ConToggleScoreboardCursor(IConsole::IResult *pResult, void *pUserData);
 
-	const char *GetClanName(int Team);
+	const char *GetTeamName(int Team) const;
 
 	bool m_Active;
 
+	IGraphics::CTextureHandle m_DeadTeeTexture;
+
+	std::optional<vec2> m_LastMousePos;
+	bool m_MouseUnlocked = false;
+
+	void SetUiMousePos(vec2 Pos);
+	void LockMouse();
+
+	class CScoreboardPopupContext : public SPopupMenuId
+	{
+	public:
+		CScoreboard *m_pScoreboard = nullptr;
+		CButtonContainer m_FriendAction;
+		CButtonContainer m_MuteAction;
+		CButtonContainer m_EmoticonAction;
+
+		CButtonContainer m_SpectateButton;
+
+		int m_ClientId;
+		bool m_IsLocal;
+		bool m_IsSpectating;
+
+		static CUi::EPopupMenuFunctionResult Render(void *pContext, CUIRect View, bool Active);
+	} m_ScoreboardPopupContext;
+
+	class CMapTitlePopupContext : public SPopupMenuId
+	{
+	public:
+		CScoreboard *m_pScoreboard = nullptr;
+
+		float m_FontSize;
+
+		static CUi::EPopupMenuFunctionResult Render(void *pContext, CUIRect View, bool Active);
+	} m_MapTitlePopupContext;
+	char m_MapTitleButtonId;
+
+	class CPlayerElement
+	{
+	public:
+		char m_PlayerButtonId;
+		char m_TimeTooltipId;
+		char m_SpectatorSecondLineButtonId;
+		char m_aTimeTooltip[32];
+
+		CCachedText m_Score;
+		CCachedText m_ScoreMillis;
+		CCachedText m_Name;
+		CCachedText m_ReadyMark;
+		CCachedText m_Clan;
+		CCachedText m_Ping;
+	};
+	CPlayerElement m_aPlayers[MAX_CLIENTS];
+
+	CCachedText m_TitleScore;
+	CCachedText m_TitleScoreMillis;
+	CCachedText m_HeadlineScore;
+	CCachedText m_HeadlineName;
+	CCachedText m_HeadlineClan;
+	CCachedText m_HeadlinePing;
+
+	void ResetTexts();
+
 public:
 	CScoreboard();
-	virtual void OnReset();
-	virtual void OnConsoleInit();
-	virtual void OnRender();
-	virtual void OnRelease();
+	int Sizeof() const override { return sizeof(*this); }
+	void OnConsoleInit() override;
+	void OnInit() override;
+	void OnReset() override;
+	void OnShutdown() override;
+	void OnWindowResize() override;
+	void OnRender() override;
+	void OnRelease() override;
+	bool OnCursorMove(float x, float y, IInput::ECursorType CursorType) override;
+	bool OnInput(const IInput::CEvent &Event) override;
 
-	bool Active();
-
-	// DDRace
-
-	virtual void OnMessage(int MsgType, void *pRawMsg);
-
-private:
-
-	float m_ServerRecord;
+	bool IsActive() const;
 };
 
 #endif
